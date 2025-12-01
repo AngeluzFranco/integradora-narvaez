@@ -1,0 +1,46 @@
+{
+  "name": "HotelClean - Sistema de Gestión Hotelera",
+  "short_name": "HotelClean",
+  "description": "Sistema PWA de gestión para personal de hotel con soporte offline",
+  "start_url": "/common/login.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
+  "orientation": "any",
+  "scope": "/",
+  "lang": "es",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Mis Habitaciones",
+      "short_name": "Habitaciones",
+      "description": "Ver habitaciones asignadas",
+      "url": "/mucamas/index.html",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Escanear QR",
+      "short_name": "QR",
+      "description": "Escanear código QR de habitación",
+      "url": "/mucamas/index.html#scan",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

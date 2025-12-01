@@ -1,0 +1,35 @@
+# Backend - Maven
+server/target/
+server/.mvn/
+server/mvnw
+server/mvnw.cmd
+server/.DS_Store
+
+# Backend - IDE
+server/.idea/
+server/.vscode/
+server/*.iml
+server/*.iws
+server/*.ipr
+
+# Backend - Logs
+server/*.log
+server/logs/
+
+# Frontend - Dependencies
+client/node_modules/
+client/package-lock.json
+
+# Frontend - IDE
+client/.vscode/
+client/.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Otros
+*.class
+*.jar
+!server/.mvn/wrapper/maven-wrapper.jar
