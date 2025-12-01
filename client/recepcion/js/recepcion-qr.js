@@ -36,6 +36,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Cargar habitaciones
 async function loadRoomsAndBuildings() {
     try {
+        // Verificar que QRCode esté disponible
+        if (typeof QRCode === 'undefined') {
+            console.warn('QRCode library not loaded yet, retrying...');
+            setTimeout(loadRoomsAndBuildings, 500);
+            return;
+        }
+
         allRooms = await api.get(ENDPOINTS.ROOMS);
         
         // Extraer edificios únicos
@@ -93,15 +100,26 @@ function renderQRCodes(rooms) {
 
         container.appendChild(qrItem);
 
-        // Generar QR con QRCode.js
-        new QRCode(document.getElementById(`qr-code-${room.id}`), {
-            text: qrData,
-            width: 150,
-            height: 150,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.M
-        });
+        // Generar QR con QRCode.js (verificar que esté disponible)
+        if (typeof QRCode !== 'undefined') {
+            try {
+                new QRCode(document.getElementById(`qr-code-${room.id}`), {
+                    text: qrData,
+                    width: 150,
+                    height: 150,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            } catch (error) {
+                console.error(`Error generating QR for room ${room.number}:`, error);
+                document.getElementById(`qr-code-${room.id}`).innerHTML = 
+                    '<span class="text-danger">❌ Error</span>';
+            }
+        } else {
+            document.getElementById(`qr-code-${room.id}`).innerHTML = 
+                '<span class="text-warning">⏳ Cargando...</span>';
+        }
     });
 }
 

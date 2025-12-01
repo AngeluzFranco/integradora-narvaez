@@ -116,20 +116,20 @@
 
         async function loadData() {
             try {
-                allRooms = await api.get(ENDPOINTS.ROOMS);
-                
-                // Extraer mucamas únicas (no hay /api/users endpoint)
-                const maidMap = new Map();
-                allRooms.forEach(room => {
-                    if (room.assignedTo && room.assignedTo.role === 'MAID') {
-                        maidMap.set(room.assignedTo.id, room.assignedTo);
-                    }
-                });
-                allUsers = Array.from(maidMap.values());
+                // Cargar habitaciones y mucamas en paralelo
+                const [rooms, maids] = await Promise.all([
+                    api.get(ENDPOINTS.ROOMS),
+                    api.get(ENDPOINTS.USERS_BY_ROLE('MAID'))
+                ]);
 
+                allRooms = rooms;
+                allUsers = maids.filter(m => m.active); // Solo mucamas activas
+
+                console.log(`Loaded ${allRooms.length} rooms and ${allUsers.length} maids`);
                 renderUI();
             } catch (error) {
                 console.error('Error loading data:', error);
+                showToast('Error al cargar datos: ' + error.message, 'danger');
             }
         }
 
