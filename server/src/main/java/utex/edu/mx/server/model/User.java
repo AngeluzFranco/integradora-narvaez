@@ -1,11 +1,13 @@
 package utex.edu.mx.server.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
+import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Entity
 @Table(name = "users")
@@ -21,39 +23,35 @@ public class User {
     @Column(unique = true, nullable = false)
     private String username;
     
+    @JsonIgnore
     @Column(nullable = false)
     private String password;
     
     @Column(nullable = false)
     private String name;
     
-    @Column(nullable = false)
+    @Column
     private String email;
-    
-    private String phone;
     
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;
     
+    @ManyToOne
+    @JoinColumn(name = "hotel_id")
+    @JsonIgnoreProperties({"buildings"})
+    private Hotel hotel;
+    
+    @Column(name = "active")
+    private Boolean active = true;
+    
     @Column(name = "created_at")
-    private LocalDateTime createdAt;
+    private LocalDateTime createdAt = LocalDateTime.now();
     
     @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-    
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-    }
-    
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
+    private LocalDateTime updatedAt = LocalDateTime.now();
     
     public enum Role {
-        MAID, ADMIN
+        ADMIN, RECEPTION, MAID
     }
 }

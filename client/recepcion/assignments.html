@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asignaciones Diarias</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/common.css">
+    <link rel="stylesheet" href="css/recepcion.css">
+</head>
+<body>
+    <!-- DAILY ASSIGNMENTS - IMPLEMENTACIÓN BÁSICA -->
+    <!-- Backend: PUT /api/rooms/{id} para asignar mucamas -->
+
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h4>🏨 Hotel Manager</h4>
+            <p class="mb-0" id="userNameSidebar"></p>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="index.html" class="nav-item">
+                <span class="nav-icon">📊</span> Dashboard
+            </a>
+            <a href="rooms.html" class="nav-item">
+                <span class="nav-icon">🚪</span> Habitaciones
+            </a>
+            <a href="incidents.html" class="nav-item">
+                <span class="nav-icon">⚠️</span> Incidencias
+            </a>
+            <a href="staff.html" class="nav-item">
+                <span class="nav-icon">👥</span> Personal
+            </a>
+            <a href="assignments.html" class="nav-item active">
+                <span class="nav-icon">📋</span> Asignaciones
+            </a>
+            <a href="qr-codes.html" class="nav-item">
+                <span class="nav-icon">📱</span> Códigos QR
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <button class="btn btn-outline-light w-100" id="logoutBtn">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="top-bar">
+            <h3>Asignaciones Diarias</h3>
+            <div>
+                <button class="btn btn-success" id="autoAssignBtn">🎯 Asignar Automáticamente</button>
+                <button class="btn btn-outline-danger" id="clearAllBtn">🗑️ Limpiar Todas</button>
+            </div>
+        </div>
+
+        <div class="alert alert-info">
+            <strong>ℹ️ Cómo funciona:</strong><br>
+            Esta interfaz permite asignar habitaciones a mucamas de forma manual o automática. 
+            La asignación actualiza el campo <code>assignedTo</code> y <code>assignedAt</code> 
+            de cada habitación usando <code>PUT /api/rooms/{id}</code>.
+        </div>
+
+        <!-- Drag and Drop Interface (Básico) -->
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Habitaciones Sin Asignar</h5>
+                    </div>
+                    <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                        <div id="unassignedRooms"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Mucamas</h5>
+                    </div>
+                    <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                        <div id="maidsContainer"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module">
+        import api from '../js/api.js';
+        import { ENDPOINTS, USER_ROLES } from '../js/config.js';
+
+        let allRooms = [];
+        let allUsers = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!api.isAuthenticated()) {
+                window.location.href = '/index.html';
+                return;
+            }
+
+            const userData = api.getUserData();
+            if (userData.role !== USER_ROLES.RECEPTION && userData.role !== USER_ROLES.ADMIN) {
+                window.location.href = '/index.html';
+                return;
+            }
+
+            document.getElementById('userNameSidebar').textContent = userData.name;
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                api.logout();
+                window.location.href = '/index.html';
+            });
+
+            await loadData();
+            setupButtons();
+        });
+
+        async function loadData() {
+            try {
+                allRooms = await api.get(ENDPOINTS.ROOMS);
+                
+                // Extraer mucamas únicas (no hay /api/users endpoint)
+                const maidMap = new Map();
+                allRooms.forEach(room => {
+                    if (room.assignedTo && room.assignedTo.role === 'MAID') {
+                        maidMap.set(room.assignedTo.id, room.assignedTo);
+                    }
+                });
+                allUsers = Array.from(maidMap.values());
+
+                renderUI();
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+
+        function renderUI() {
+            // Habitaciones sin asignar
+            const unassigned = allRooms.filter(r => !r.assignedTo);
+            document.getElementById('unassignedRooms').innerHTML = unassigned.length === 0 
+                ? '<p class="text-muted text-center">Todas asignadas</p>'
+                : unassigned.map(room => `
+                    <div class="card mb-2">
+                        <div class="card-body p-2">
+                            <strong>${room.number}</strong> - ${room.building?.name || ''}
+                            <select class="form-select form-select-sm mt-1" onchange="assignRoom(${room.id}, this.value)">
+                                <option value="">Asignar a...</option>
+                                ${allUsers.map(u => `<option value="${u.id}">${u.name}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                `).join('');
+
+            // Mucamas con sus habitaciones
+            document.getElementById('maidsContainer').innerHTML = allUsers.length === 0
+                ? '<p class="text-muted text-center">No hay mucamas con asignaciones</p>'
+                : allUsers.map(maid => {
+                    const maidRooms = allRooms.filter(r => r.assignedTo?.id === maid.id);
+                    return `
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <strong>${maid.name}</strong>
+                                <span class="badge bg-primary float-end">${maidRooms.length} hab.</span>
+                            </div>
+                            <div class="card-body p-2">
+                                ${maidRooms.map(r => `
+                                    <span class="badge bg-secondary me-1 mb-1">
+                                        ${r.number}
+                                        <button class="btn-close btn-close-white ms-1" 
+                                                onclick="unassignRoom(${r.id})" 
+                                                style="font-size: 0.6rem;"></button>
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+        }
+
+        window.assignRoom = async (roomId, maidId) => {
+            if (!maidId) return;
+            
+            try {
+                const room = await api.get(ENDPOINTS.ROOM_BY_ID(roomId));
+                room.assignedTo = { id: parseInt(maidId) };
+                room.assignedAt = new Date().toISOString();
+                await api.put(ENDPOINTS.ROOM_BY_ID(roomId), room);
+                
+                await loadData();
+                showToast('Habitación asignada', 'success');
+            } catch (error) {
+                console.error('Error assigning room:', error);
+                showToast('Error al asignar', 'danger');
+            }
+        };
+
+        window.unassignRoom = async (roomId) => {
+            try {
+                const room = await api.get(ENDPOINTS.ROOM_BY_ID(roomId));
+                room.assignedTo = null;
+                room.assignedAt = null;
+                await api.put(ENDPOINTS.ROOM_BY_ID(roomId), room);
+                
+                await loadData();
+                showToast('Asignación eliminada', 'success');
+            } catch (error) {
+                console.error('Error unassigning room:', error);
+                showToast('Error al eliminar asignación', 'danger');
+            }
+        };
+
+        function setupButtons() {
+            document.getElementById('autoAssignBtn').addEventListener('click', async () => {
+                if (!confirm('¿Asignar habitaciones automáticamente de forma equitativa?')) return;
+                
+                // Algoritmo simple: distribuir equitativamente
+                const unassigned = allRooms.filter(r => !r.assignedTo);
+                if (allUsers.length === 0 || unassigned.length === 0) {
+                    alert('No hay mucamas o habitaciones para asignar');
+                    return;
+                }
+
+                try {
+                    for (let i = 0; i < unassigned.length; i++) {
+                        const room = unassigned[i];
+                        const maid = allUsers[i % allUsers.length];
+                        
+                        room.assignedTo = { id: maid.id };
+                        room.assignedAt = new Date().toISOString();
+                        await api.put(ENDPOINTS.ROOM_BY_ID(room.id), room);
+                    }
+
+                    await loadData();
+                    showToast('Asignaciones completadas', 'success');
+                } catch (error) {
+                    console.error('Error auto-assigning:', error);
+                    showToast('Error en asignación automática', 'danger');
+                }
+            });
+
+            document.getElementById('clearAllBtn').addEventListener('click', async () => {
+                if (!confirm('¿Eliminar todas las asignaciones?')) return;
+
+                try {
+                    const assigned = allRooms.filter(r => r.assignedTo);
+                    for (const room of assigned) {
+                        room.assignedTo = null;
+                        room.assignedAt = null;
+                        await api.put(ENDPOINTS.ROOM_BY_ID(room.id), room);
+                    }
+
+                    await loadData();
+                    showToast('Todas las asignaciones eliminadas', 'success');
+                } catch (error) {
+                    console.error('Error clearing assignments:', error);
+                    showToast('Error al limpiar asignaciones', 'danger');
+                }
+            });
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type} position-fixed top-0 end-0 m-3`;
+            toast.style.zIndex = '9999';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+    </script>
+</body>
+</html>

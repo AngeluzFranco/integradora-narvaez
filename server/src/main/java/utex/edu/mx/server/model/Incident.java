@@ -1,10 +1,10 @@
 package utex.edu.mx.server.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
+import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
@@ -20,66 +20,45 @@ public class Incident {
     
     @ManyToOne
     @JoinColumn(name = "room_id", nullable = false)
+    @JsonIgnoreProperties({"building", "assignedTo"})
     private Room room;
     
     @ManyToOne
-    @JoinColumn(name = "reported_by_id", nullable = false)
+    @JoinColumn(name = "reported_by", nullable = false)
+    @JsonIgnoreProperties({"password", "hotel"})
     private User reportedBy;
     
-    @Column(nullable = false)
-    private String category;
-    
-    @Column(nullable = false, length = 1000)
+    @Column(nullable = false, length = 2000)
     private String description;
     
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private IncidentStatus status;
+    private Severity severity = Severity.MEDIUM;
     
-    @Column(length = 1000)
-    private String resolution;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private IncidentStatus status = IncidentStatus.OPEN;
     
-    // Máximo 3 fotos en base64 (comprimidas)
-    @Column(name = "photo1", columnDefinition = "LONGTEXT")
-    private String photo1;
+    @Column(name = "photos", columnDefinition = "TEXT")
+    private String photos; // JSON array of base64 images
     
-    @Column(name = "photo2", columnDefinition = "LONGTEXT")
-    private String photo2;
-    
-    @Column(name = "photo3", columnDefinition = "LONGTEXT")
-    private String photo3;
-    
-    @ManyToOne
-    @JoinColumn(name = "resolved_by_id")
-    private User resolvedBy;
+    @Column(name = "resolution_notes", length = 2000)
+    private String resolutionNotes;
     
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;
     
     @Column(name = "created_at")
-    private LocalDateTime createdAt;
+    private LocalDateTime createdAt = LocalDateTime.now();
     
     @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+    private LocalDateTime updatedAt = LocalDateTime.now();
     
-    @Column(name = "synced", nullable = false)
-    private Boolean synced = false;
-    
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-        if (status == null) {
-            status = IncidentStatus.PENDING;
-        }
-    }
-    
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+    public enum Severity {
+        LOW, MEDIUM, HIGH
     }
     
     public enum IncidentStatus {
-        PENDING, IN_PROGRESS, RESOLVED, CANCELLED
+        OPEN, RESOLVED
     }
 }

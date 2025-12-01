@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Incidencias</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/common.css">
+    <link rel="stylesheet" href="css/mucama.css">
+</head>
+<body>
+    <!-- INCIDENTS VIEW - Mobile Optimized -->
+    <!-- Backend: GET /api/incidents/maid/{maidId} - IncidentController.getIncidentsByMaid() -->
+    <!--          POST /api/incidents - IncidentController.createIncident() -->
+
+    <header class="mobile-header">
+        <div class="d-flex justify-content-between align-items-center px-3 py-2">
+            <h5 class="mb-0 text-white">Mis Incidencias</h5>
+            <button class="btn btn-sm btn-light" id="newIncidentBtn">+ Nueva</button>
+        </div>
+    </header>
+
+    <main class="mobile-content">
+        <!-- Filtros -->
+        <div class="px-3 py-2 bg-white border-bottom">
+            <div class="btn-group w-100" role="group">
+                <button type="button" class="btn btn-outline-primary active" data-filter="all">Todas</button>
+                <button type="button" class="btn btn-outline-warning" data-filter="OPEN">Abiertas</button>
+                <button type="button" class="btn btn-outline-success" data-filter="RESOLVED">Resueltas</button>
+            </div>
+        </div>
+
+        <!-- Lista de incidencias -->
+        <div class="p-3">
+            <div id="incidentsList"></div>
+            <div id="emptyState" class="text-center py-5 d-none">
+                <p class="text-muted">No hay incidencias registradas</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <a href="index.html" class="bottom-nav-item">
+            <svg width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M8.707 1.5a1 1 0 0 0-1.414 0L.646 8.146a.5.5 0 0 0 .708.708L2 8.207V13.5A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V8.207l.646.647a.5.5 0 0 0 .708-.708L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.707 1.5ZM13 7.207V13.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5V7.207l5-5 5 5Z"/>
+            </svg>
+            <span>Inicio</span>
+        </a>
+        <a href="incidents.html" class="bottom-nav-item active">
+            <svg width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                <path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z"/>
+            </svg>
+            <span>Incidencias</span>
+        </a>
+        <a href="qr-scan.html" class="bottom-nav-item">
+            <svg width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M0 0h6v6H0V0zm1 1v4h4V1H1zm6-1h3v3H7V0zm0 4h3v3H7V4zM1 7h4v4H1V7zm6 0h3v3H7V7zm0 4h3v3H7v-3z"/>
+            </svg>
+            <span>Escanear</span>
+        </a>
+        <a href="team.html" class="bottom-nav-item">
+            <svg width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7Zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+            </svg>
+            <span>Equipo</span>
+        </a>
+    </nav>
+
+    <!-- Modal Nueva Incidencia -->
+    <div class="modal fade" id="newIncidentModal" tabindex="-1">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva Incidencia</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="incidentForm">
+                        <!-- Selección de habitación -->
+                        <div class="mb-3">
+                            <label class="form-label">Habitación *</label>
+                            <select class="form-select form-select-lg" id="incidentRoom" required>
+                                <option value="">Seleccione una habitación</option>
+                            </select>
+                        </div>
+
+                        <!-- Descripción -->
+                        <div class="mb-3">
+                            <label class="form-label">Descripción *</label>
+                            <textarea class="form-control" id="incidentDescription" rows="4" 
+                                      placeholder="Describe el problema..." required></textarea>
+                        </div>
+
+                        <!-- Severidad -->
+                        <div class="mb-3">
+                            <label class="form-label">Severidad *</label>
+                            <select class="form-select form-select-lg" id="incidentSeverity" required>
+                                <option value="LOW">Baja</option>
+                                <option value="MEDIUM" selected>Media</option>
+                                <option value="HIGH">Alta</option>
+                            </select>
+                        </div>
+
+                        <!-- Fotos (máximo 3) -->
+                        <div class="mb-3">
+                            <label class="form-label">Fotos (máximo 3)</label>
+                            <input type="file" class="form-control" id="incidentPhotos" 
+                                   accept="image/*" multiple capture="environment">
+                            <small class="text-muted">Las fotos se comprimen automáticamente</small>
+                            <div id="photoPreviewContainer" class="photo-preview-container"></div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100">
+                            Registrar Incidencia
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Detalle Incidencia -->
+    <div class="modal fade" id="incidentDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Detalle de Incidencia</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="incidentDetailContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="js/mucama-incidents.js"></script>
+</body>
+</html>

@@ -1,10 +1,10 @@
 package utex.edu.mx.server.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
+import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
@@ -18,74 +18,39 @@ public class Room {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @ManyToOne
-    @JoinColumn(name = "building_id", nullable = false)
-    private Building building;
-    
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false)
     private String number;
     
     @Column(nullable = false)
     private Integer floor;
     
-    @Column(nullable = false)
-    private String type;
-    
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private CleaningStatus cleaningStatus;
+    private RoomStatus status = RoomStatus.DIRTY;
     
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private OccupancyStatus occupancyStatus;
+    @ManyToOne
+    @JoinColumn(name = "building_id", nullable = false)
+    @JsonIgnoreProperties({"rooms", "hotel"})
+    private Building building;
     
-    private Integer beds;
+    @ManyToOne
+    @JoinColumn(name = "assigned_to")
+    @JsonIgnoreProperties({"password", "rooms"})
+    private User assignedTo;
     
-    private Double price;
+    @Column(name = "assigned_at")
+    private LocalDateTime assignedAt;
     
-    @Column(name = "qr_code", unique = true)
-    private String qrCode;
+    @Column(name = "active")
+    private Boolean active = true;
     
     @Column(name = "created_at")
-    private LocalDateTime createdAt;
+    private LocalDateTime createdAt = LocalDateTime.now();
     
     @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+    private LocalDateTime updatedAt = LocalDateTime.now();
     
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-        if (cleaningStatus == null) {
-            cleaningStatus = CleaningStatus.DIRTY;
-        }
-        if (occupancyStatus == null) {
-            occupancyStatus = OccupancyStatus.AVAILABLE;
-        }
-    }
-    
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
-    
-    // Estados de limpieza según requerimientos
-    public enum CleaningStatus {
-        CLEAN,      // Limpia - puede reservarse
-        DIRTY,      // Sucia - necesita limpieza
-        CLEANING    // En proceso de limpieza
-    }
-    
-    // Estados de ocupación según requerimientos
-    public enum OccupancyStatus {
-        AVAILABLE,   // Disponible para reservar (solo si está limpia)
-        OCCUPIED,    // Ocupada por huésped
-        BLOCKED      // Bloqueada (mantenimiento, etc.)
-    }
-    
-    // Método auxiliar para verificar si puede reservarse
-    public boolean canBeReserved() {
-        return cleaningStatus == CleaningStatus.CLEAN && 
-               occupancyStatus == OccupancyStatus.AVAILABLE;
+    public enum RoomStatus {
+        CLEAN, DIRTY, OCCUPIED
     }
 }

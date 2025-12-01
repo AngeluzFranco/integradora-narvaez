@@ -1,137 +1,91 @@
 package utex.edu.mx.server.controller;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
-import utex.edu.mx.server.dto.ApiResponse;
 import utex.edu.mx.server.model.Incident;
 import utex.edu.mx.server.repository.IncidentRepository;
-import utex.edu.mx.server.repository.RoomRepository;
-import utex.edu.mx.server.repository.UserRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
-@RequestMapping("/incidents")
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/incidents")
+@RequiredArgsConstructor
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:5173"})
 public class IncidentController {
     
-    @Autowired
-    private IncidentRepository incidentRepository;
-    
-    @Autowired
-    private RoomRepository roomRepository;
-    
-    @Autowired
-    private UserRepository userRepository;
+    private final IncidentRepository incidentRepository;
     
     @GetMapping
-    public ResponseEntity<ApiResponse<List<Incident>>> getAllIncidents() {
-        List<Incident> incidents = incidentRepository.findAll();
-        return ResponseEntity.ok(ApiResponse.success(incidents));
+    public ResponseEntity<List<Incident>> getAllIncidents() {
+        return ResponseEntity.ok(incidentRepository.findAll());
     }
     
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<Incident>> getIncidentById(@PathVariable Long id) {
+    public ResponseEntity<Incident> getIncidentById(@PathVariable Long id) {
         return incidentRepository.findById(id)
-                .map(incident -> ResponseEntity.ok(ApiResponse.success(incident)))
-                .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(ApiResponse.error("Incident not found")));
-    }
-    
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<ApiResponse<List<Incident>>> getIncidentsByUser(@PathVariable Long userId) {
-        return userRepository.findById(userId)
-                .map(user -> {
-                    List<Incident> incidents = incidentRepository.findByReportedByOrderByCreatedAtDesc(user);
-                    return ResponseEntity.ok(ApiResponse.success(incidents));
-                })
-                .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(ApiResponse.error("User not found")));
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
     
     @GetMapping("/room/{roomId}")
-    public ResponseEntity<ApiResponse<List<Incident>>> getIncidentsByRoom(@PathVariable Long roomId) {
-        return roomRepository.findById(roomId)
-                .map(room -> {
-                    List<Incident> incidents = incidentRepository.findByRoomOrderByCreatedAtDesc(room);
-                    return ResponseEntity.ok(ApiResponse.success(incidents));
-                })
-                .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(ApiResponse.error("Room not found")));
+    public ResponseEntity<List<Incident>> getIncidentsByRoom(@PathVariable Long roomId) {
+        return ResponseEntity.ok(incidentRepository.findByRoomId(roomId));
+    }
+    
+    @GetMapping("/maid/{maidId}")
+    public ResponseEntity<List<Incident>> getIncidentsByMaid(@PathVariable Long maidId) {
+        return ResponseEntity.ok(incidentRepository.findByReportedById(maidId));
+    }
+    
+    @GetMapping("/status/{status}")
+    public ResponseEntity<List<Incident>> getIncidentsByStatus(@PathVariable Incident.IncidentStatus status) {
+        return ResponseEntity.ok(incidentRepository.findByStatus(status));
     }
     
     @PostMapping
-    public ResponseEntity<ApiResponse<Incident>> createIncident(@RequestBody Incident incident) {
-        try {
-            // Validate room exists
-            if (incident.getRoom() == null || !roomRepository.existsById(incident.getRoom().getId())) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(ApiResponse.error("Invalid room"));
-            }
-            
-            // Validate user exists
-            if (incident.getReportedBy() == null || !userRepository.existsById(incident.getReportedBy().getId())) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(ApiResponse.error("Invalid user"));
-            }
-            
-            // Validate maximum 3 photos
-            int photoCount = 0;
-            if (incident.getPhoto1() != null && !incident.getPhoto1().isEmpty()) photoCount++;
-            if (incident.getPhoto2() != null && !incident.getPhoto2().isEmpty()) photoCount++;
-            if (incident.getPhoto3() != null && !incident.getPhoto3().isEmpty()) photoCount++;
-            
-            if (photoCount > 3) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(ApiResponse.error("Maximum 3 photos allowed"));
-            }
-            
-            Incident savedIncident = incidentRepository.save(incident);
-            return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(ApiResponse.success(savedIncident, "Incident created successfully"));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("Failed to create incident: " + e.getMessage()));
-        }
+    public ResponseEntity<Incident> createIncident(@RequestBody Incident incident) {
+        incident.setCreatedAt(LocalDateTime.now());
+        incident.setUpdatedAt(LocalDateTime.now());
+        return ResponseEntity.ok(incidentRepository.save(incident));
     }
     
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<Incident>> updateIncident(@PathVariable Long id, @RequestBody Incident incidentDetails) {
+    public ResponseEntity<Incident> updateIncident(@PathVariable Long id, @RequestBody Incident incidentDetails) {
         return incidentRepository.findById(id)
                 .map(incident -> {
-                    incident.setCategory(incidentDetails.getCategory());
                     incident.setDescription(incidentDetails.getDescription());
+                    incident.setSeverity(incidentDetails.getSeverity());
                     incident.setStatus(incidentDetails.getStatus());
-                    incident.setResolution(incidentDetails.getResolution());
-                    incident.setResolvedBy(incidentDetails.getResolvedBy());
+                    incident.setResolutionNotes(incidentDetails.getResolutionNotes());
                     incident.setResolvedAt(incidentDetails.getResolvedAt());
-                    
-                    // Update photos if provided
-                    if (incidentDetails.getPhoto1() != null) incident.setPhoto1(incidentDetails.getPhoto1());
-                    if (incidentDetails.getPhoto2() != null) incident.setPhoto2(incidentDetails.getPhoto2());
-                    if (incidentDetails.getPhoto3() != null) incident.setPhoto3(incidentDetails.getPhoto3());
-                    
-                    incident.setSynced(true);
-                    
-                    Incident updatedIncident = incidentRepository.save(incident);
-                    return ResponseEntity.ok(ApiResponse.success(updatedIncident, "Incident updated successfully"));
+                    incident.setUpdatedAt(LocalDateTime.now());
+                    return ResponseEntity.ok(incidentRepository.save(incident));
                 })
-                .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(ApiResponse.error("Incident not found")));
+                .orElse(ResponseEntity.notFound().build());
+    }
+    
+    @PatchMapping("/{id}/resolve")
+    public ResponseEntity<Incident> resolveIncident(@PathVariable Long id, @RequestBody String resolutionNotes) {
+        return incidentRepository.findById(id)
+                .map(incident -> {
+                    incident.setStatus(Incident.IncidentStatus.RESOLVED);
+                    incident.setResolutionNotes(resolutionNotes);
+                    incident.setResolvedAt(LocalDateTime.now());
+                    incident.setUpdatedAt(LocalDateTime.now());
+                    return ResponseEntity.ok(incidentRepository.save(incident));
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
     
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<String>> deleteIncident(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteIncident(@PathVariable Long id) {
         return incidentRepository.findById(id)
                 .map(incident -> {
                     incidentRepository.delete(incident);
-                    return ResponseEntity.ok(ApiResponse.success("Incident deleted successfully"));
+                    return ResponseEntity.ok().<Void>build();
                 })
-                .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(ApiResponse.error("Incident not found")));
+                .orElse(ResponseEntity.notFound().build());
     }
 }

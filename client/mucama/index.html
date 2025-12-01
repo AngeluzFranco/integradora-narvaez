@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0d6efd">
+    <title>Mucama - Habitaciones</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/common.css">
+    <link rel="stylesheet" href="css/mucama.css">
+</head>
+<body>
+    <!-- MOBILE-FIRST UI FOR MAIDS -->
+    <!-- Backend: GET /api/rooms/maid/{maidId} - RoomController.getRoomsByMaid() -->
+    
+    <!-- Header fijo -->
+    <header class="mobile-header">
+        <div class="d-flex justify-content-between align-items-center px-3 py-2">
+            <h5 class="mb-0 text-white">Mis Habitaciones</h5>
+            <div>
+                <span class="badge bg-light text-dark me-2" id="userNameBadge"></span>
+                <button class="btn btn-sm btn-outline-light" id="logoutBtn">Salir</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenido principal con padding para header y bottom nav -->
+    <main class="mobile-content">
+        <!-- Stats rápidos -->
+        <div class="px-3 py-2 bg-white border-bottom">
+            <div class="row text-center">
+                <div class="col-4">
+                    <div class="stat-card">
+                        <div class="stat-number text-success" id="cleanCount">0</div>
+                        <div class="stat-label">Limpias</div>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="stat-card">
+                        <div class="stat-number text-warning" id="dirtyCount">0</div>
+                        <div class="stat-label">Pendientes</div>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="stat-card">
+                        <div class="stat-number text-danger" id="occupiedCount">0</div>
+                        <div class="stat-label">Ocupadas</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista de habitaciones asignadas -->
+        <div class="p-3">
+            <div id="roomsList"></div>
+            <div id="emptyState" class="text-center py-5 d-none">
+                <p class="text-muted">No tienes habitaciones asignadas</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation - Mobile típico -->
+    <nav class="bottom-nav">
+        <a href="index.html" class="bottom-nav-item active">
+            <svg width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M8.707 1.5a1 1 0 0 0-1.414 0L.646 8.146a.5.5 0 0 0 .708.708L2 8.207V13.5A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V8.207l.646.647a.5.5 0 0 0 .708-.708L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.707 1.5ZM13 7.207V13.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5V7.207l5-5 5 5Z"/>
+            </svg>
+            <span>Inicio</span>
+        </a>
+        <a href="incidents.html" class="bottom-nav-item">
+            <svg width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                <path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z"/>
+            </svg>
+            <span>Incidencias</span>
+        </a>
+        <a href="qr-scan.html" class="bottom-nav-item">
+            <svg width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M0 0h6v6H0V0zm1 1v4h4V1H1zm6-1h3v3H7V0zm0 4h3v3H7V4zM1 7h4v4H1V7zm6 0h3v3H7V7zm0 4h3v3H7v-3z"/>
+                <path d="M2 2h2v2H2V2zm8 0h2v2h-2V2zm0 6h2v2h-2V8zM2 8h2v2H2V8zm6 4h2v2H8v-2z"/>
+            </svg>
+            <span>Escanear</span>
+        </a>
+        <a href="team.html" class="bottom-nav-item">
+            <svg width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7Zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-5.784 6A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216ZM4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/>
+            </svg>
+            <span>Equipo</span>
+        </a>
+    </nav>
+
+    <!-- Modal para cambiar estado de habitación -->
+    <div class="modal fade" id="roomModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Habitación <span id="modalRoomNumber"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">Actualizar estado:</p>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-lg btn-success status-btn" data-status="CLEAN">
+                            ✓ Marcar como Limpia
+                        </button>
+                        <button class="btn btn-lg btn-warning status-btn" data-status="DIRTY">
+                            ⚠ Marcar como Sucia
+                        </button>
+                        <button class="btn btn-lg btn-danger status-btn" data-status="OCCUPIED">
+                            🚫 Marcar como Ocupada
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="js/mucama-home.js"></script>
+</body>
+</html>

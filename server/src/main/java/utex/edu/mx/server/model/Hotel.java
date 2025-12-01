@@ -1,10 +1,10 @@
 package utex.edu.mx.server.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
+import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -19,36 +19,28 @@ public class Hotel {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false)
     private String name;
     
-    @Column(nullable = false)
+    @Column
     private String address;
     
+    @Column
     private String phone;
     
+    @Column
     private String email;
     
-    @Column(nullable = false)
+    @Column(name = "active")
     private Boolean active = true;
     
     @OneToMany(mappedBy = "hotel", cascade = CascadeType.ALL)
+    @JsonIgnoreProperties({"hotel", "rooms"})
     private List<Building> buildings;
     
     @Column(name = "created_at")
-    private LocalDateTime createdAt;
+    private LocalDateTime createdAt = LocalDateTime.now();
     
     @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-    
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-    }
-    
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
+    private LocalDateTime updatedAt = LocalDateTime.now();
 }

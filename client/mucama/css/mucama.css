@@ -1,0 +1,295 @@
+/* ======================================
+   MUCAMA.CSS - Mobile-First Styles
+   100% optimizado para uso táctil en Android
+   ====================================== */
+
+body {
+    background-color: #f5f5f5;
+    padding: 0;
+    margin: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Header fijo superior */
+.mobile-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Contenido principal con padding para header y bottom nav */
+.mobile-content {
+    padding-top: 60px;
+    padding-bottom: 70px;
+    min-height: 100vh;
+}
+
+/* Stats cards */
+.stat-card {
+    padding: 8px;
+}
+
+.stat-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #6c757d;
+    text-transform: uppercase;
+}
+
+/* Room cards - optimizadas para touch */
+.room-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+    position: relative;
+}
+
+.room-card:active {
+    transform: scale(0.98);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+}
+
+.room-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #212529;
+}
+
+.room-building {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.room-status-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-CLEAN {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-DIRTY {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.status-OCCUPIED {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+/* Bottom Navigation - Android style */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    display: flex;
+    justify-content: space-around;
+    padding: 8px 0;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+    z-index: 1000;
+}
+
+.bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 8px;
+    color: #6c757d;
+    text-decoration: none;
+    transition: color 0.2s ease;
+    min-width: 60px;
+}
+
+.bottom-nav-item.active {
+    color: #667eea;
+}
+
+.bottom-nav-item span {
+    font-size: 0.7rem;
+    margin-top: 4px;
+}
+
+.bottom-nav-item svg {
+    margin-bottom: 2px;
+}
+
+/* Botones grandes para touch */
+.btn-lg {
+    padding: 16px;
+    font-size: 1.1rem;
+    border-radius: 12px;
+}
+
+.status-btn {
+    border: 2px solid transparent;
+    font-weight: 600;
+}
+
+.status-btn:active {
+    transform: scale(0.97);
+}
+
+/* Modal adaptado a móvil */
+.modal-dialog-centered {
+    margin: 1rem;
+}
+
+.modal-content {
+    border-radius: 16px;
+}
+
+/* Incident card */
+.incident-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.incident-severity-HIGH {
+    border-left: 4px solid #dc3545;
+}
+
+.incident-severity-MEDIUM {
+    border-left: 4px solid #ffc107;
+}
+
+.incident-severity-LOW {
+    border-left: 4px solid #0dcaf0;
+}
+
+.incident-photos {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 8px 0;
+}
+
+.incident-photo {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+/* Photo upload preview */
+.photo-preview-container {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.photo-preview {
+    position: relative;
+    width: 100px;
+    height: 100px;
+}
+
+.photo-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.photo-preview-remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #dc3545;
+    color: white;
+    border: 2px solid white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+/* QR Scanner */
+#qr-reader {
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+#qr-reader video {
+    border-radius: 12px;
+}
+
+/* Team view */
+.maid-card {
+    background: white;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.maid-name {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.room-chip {
+    display: inline-block;
+    background: #e9ecef;
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 0.875rem;
+    margin: 4px 4px 4px 0;
+}
+
+/* Loading state */
+.loading-skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+    border-radius: 8px;
+    height: 100px;
+    margin-bottom: 12px;
+}
+
+@keyframes loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Responsive: solo para tablets */
+@media (min-width: 768px) {
+    .mobile-content {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+}
