@@ -1,5 +1,5 @@
 /* ======================================
-   MUCAMA-INCIDENTS.JS - Gestión Incidencias
+   MUCAMA-INCIDENTS.JS - Gestión Incidencias con Offline
    Backend: GET /api/incidents/maid/{maidId}
             POST /api/incidents
             GET /api/rooms/maid/{maidId}
@@ -7,6 +7,7 @@
 
 import api from '../../js/api.js';
 import { ENDPOINTS, INCIDENT_STATUS, USER_ROLES } from '../../js/config.js';
+import dbService from './db-service.js';
 
 let allIncidents = [];
 let currentFilter = 'all';
@@ -25,6 +26,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    // Connectivity indicator
+    updateConnectivityIndicator();
+    window.addEventListener('online', () => {
+        updateConnectivityIndicator();
+        loadIncidents();
+    });
+    window.addEventListener('offline', updateConnectivityIndicator);
+
     // Cargar habitaciones asignadas (para el selector)
     await loadMyRooms();
 
@@ -37,18 +46,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupIncidentForm();
     setupPhotoUpload();
 
-    // Auto-refresh cada 30 segundos
-    setInterval(loadIncidents, 30000);
+    // Auto-refresh cada 30 segundos (solo online)
+    setInterval(() => {
+        if (navigator.onLine) loadIncidents();
+    }, 30000);
 });
 
-// Cargar habitaciones asignadas para el selector
+// Cargar habitaciones asignadas para el selector (con offline)
 async function loadMyRooms() {
     try {
         const userData = api.getUserData();
-        myRooms = await api.get(ENDPOINTS.ROOMS_BY_MAID(userData.userId));
+        
+        if (navigator.onLine) {
+            myRooms = await api.get(ENDPOINTS.ROOMS_BY_MAID(userData.userId));
+            // Guardar en local
+            await dbService.saveRoomsLocal(myRooms);
+        } else {
+            // Usar cache local
+            myRooms = await dbService.getRoomsLocal();
+            showToast('📴 Modo offline - usando datos guardados', 'warning');
+        }
+        
         populateRoomSelector();
     } catch (error) {
         console.error('Error loading rooms:', error);
+        // Intentar cargar desde cache local
+        try {
+            myRooms = await dbService.getRoomsLocal();
+            populateRoomSelector();
+        } catch (e) {
+            showToast('Error al cargar habitaciones', 'danger');
+        }
     }
 }
 
@@ -60,19 +88,35 @@ function populateRoomSelector() {
         `).join('');
 }
 
-// Cargar incidencias de esta mucama
+// Cargar incidencias de esta mucama (con offline)
 // Backend: IncidentController.getIncidentsByMaid() - GET /api/incidents/maid/{maidId}
 async function loadIncidents() {
     try {
         const userData = api.getUserData();
-        const incidents = await api.get(ENDPOINTS.INCIDENTS_BY_MAID(userData.userId));
         
-        allIncidents = incidents;
-        renderIncidents(filterIncidents(incidents));
+        if (navigator.onLine) {
+            const incidents = await api.get(ENDPOINTS.INCIDENTS_BY_MAID(userData.userId));
+            allIncidents = incidents;
+            
+            // Guardar en local
+            await dbService.saveIncidentsLocal(incidents);
+        } else {
+            // Usar cache local
+            allIncidents = await dbService.getIncidentsLocal();
+        }
+        
+        renderIncidents(filterIncidents(allIncidents));
 
     } catch (error) {
         console.error('Error loading incidents:', error);
-        showToast('Error al cargar incidencias', 'danger');
+        // Intentar cargar desde cache
+        try {
+            allIncidents = await dbService.getIncidentsLocal();
+            renderIncidents(filterIncidents(allIncidents));
+            showToast('📴 Usando datos guardados', 'info');
+        } catch (e) {
+            showToast('Error al cargar incidencias', 'danger');
+        }
     }
 }
 
@@ -151,7 +195,7 @@ function setupIncidentForm() {
     });
 }
 
-// Crear nueva incidencia
+// Crear nueva incidencia (con offline sync)
 // Backend: IncidentController.createIncident() - POST /api/incidents
 async function createIncident() {
     try {
@@ -176,12 +220,18 @@ async function createIncident() {
             description: description,
             severity: severity,
             status: INCIDENT_STATUS.OPEN,
-            photos: JSON.stringify(photosBase64) // Array de strings base64
+            photos: JSON.stringify(photosBase64)
         };
 
-        await api.post(ENDPOINTS.INCIDENTS, incidentData);
-
-        showToast('Incidencia registrada correctamente', 'success');
+        if (navigator.onLine) {
+            // Enviar directamente
+            await api.post(ENDPOINTS.INCIDENTS, incidentData);
+            showToast('Incidencia registrada correctamente', 'success');
+        } else {
+            // Guardar en local para sync posterior
+            await dbService.createIncidentLocal(incidentData);
+            showToast('📴 Incidencia guardada. Se sincronizará cuando haya conexión', 'warning');
+        }
 
         // Cerrar modal y resetear
         const modal = bootstrap.Modal.getInstance(document.getElementById('newIncidentModal'));
@@ -378,4 +428,19 @@ function showToast(message, type = 'info') {
     document.body.appendChild(toast);
     
     setTimeout(() => toast.remove(), 3000);
+}
+
+function updateConnectivityIndicator() {
+    const header = document.querySelector('.top-bar h3');
+    if (!header) return;
+    
+    const existingBadge = header.querySelector('.connectivity-badge');
+    if (existingBadge) existingBadge.remove();
+    
+    if (!navigator.onLine) {
+        const badge = document.createElement('span');
+        badge.className = 'badge bg-warning text-dark ms-2 connectivity-badge';
+        badge.textContent = '📴 Offline';
+        header.appendChild(badge);
+    }
 }

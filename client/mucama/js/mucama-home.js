@@ -1,14 +1,20 @@
 /* ======================================
-   MUCAMA-HOME.JS - Dashboard Mucama
+   MUCAMA-HOME.JS - Dashboard Mucama CON OFFLINE + WEBSOCKET
    Backend: GET /api/rooms/maid/{maidId}
             PATCH /api/rooms/{id}/status
+   Offline: PouchDB local storage + sync queue
+   WebSocket: Notificaciones en tiempo real
    ====================================== */
 
 import api from '../../js/api.js';
 import { ENDPOINTS, ROOM_STATUS, USER_ROLES } from '../../js/config.js';
+import dbService from './db-service.js';
+import wsClient from '../../js/websocket-client.js';
 
 let currentRooms = [];
 let currentRoomId = null;
+let isOfflineMode = !navigator.onLine;
+let wsSubscriptions = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Verificar autenticación y rol
@@ -32,22 +38,60 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = '/index.html';
     });
 
+    // Mostrar indicador de conectividad
+    updateConnectivityIndicator();
+    window.addEventListener('online', () => {
+        isOfflineMode = false;
+        updateConnectivityIndicator();
+        loadMyRooms();
+    });
+    window.addEventListener('offline', () => {
+        isOfflineMode = true;
+        updateConnectivityIndicator();
+    });
+
     // Cargar habitaciones asignadas
     await loadMyRooms();
 
     // Event listeners para cambiar estado
     setupStatusButtons();
 
-    // Actualizar cada 30 segundos
-    setInterval(loadMyRooms, 30000);
+    // Conectar WebSocket para notificaciones en tiempo real
+    if (navigator.onLine) {
+        setupWebSocket();
+    }
+
+    // Actualizar cada 30 segundos (solo si no hay WebSocket)
+    setInterval(() => {
+        if (navigator.onLine && !wsClient.isConnected()) {
+            loadMyRooms();
+        }
+    }, 30000);
 });
 
-// Cargar habitaciones asignadas a esta mucama
+// Cargar habitaciones asignadas a esta mucama (con soporte offline)
 // Backend: RoomController.getRoomsByMaid() - GET /api/rooms/maid/{maidId}
+// Offline: Lee desde PouchDB local
 async function loadMyRooms() {
     try {
         const userData = api.getUserData();
-        const rooms = await api.get(ENDPOINTS.ROOMS_BY_MAID(userData.userId));
+        let rooms;
+
+        if (navigator.onLine) {
+            // ONLINE: Obtener del backend
+            try {
+                rooms = await api.get(ENDPOINTS.ROOMS_BY_MAID(userData.userId));
+                // Guardar en PouchDB para uso offline
+                await dbService.saveRoomsLocal(rooms);
+            } catch (error) {
+                console.warn('Error cargando del backend, usando datos locales:', error);
+                rooms = await dbService.getRoomsLocal(userData.userId);
+            }
+        } else {
+            // OFFLINE: Obtener de PouchDB
+            console.log('📵 Modo offline: Cargando datos locales');
+            rooms = await dbService.getRoomsLocal(userData.userId);
+        }
         
         currentRooms = rooms;
         renderRooms(rooms);
@@ -127,6 +171,7 @@ function setupStatusButtons() {
 
 // Actualizar estado de habitación
 // Backend: RoomController.updateRoomStatus() - PATCH /api/rooms/{id}/status
+// Offline: Guarda en PouchDB y cola de sincronización
 async function updateRoomStatus(roomId, status) {
     try {
         // Cerrar modal
@@ -134,10 +179,15 @@ async function updateRoomStatus(roomId, status) {
         const modal = bootstrap.Modal.getInstance(modalEl);
         modal.hide();
 
-        // Actualizar en backend
-        await api.patch(ENDPOINTS.ROOM_STATUS(roomId), status);
-
-        showToast('Estado actualizado correctamente', 'success');
+        if (navigator.onLine) {
+            // ONLINE: Actualizar en backend
+            await api.patch(ENDPOINTS.ROOM_STATUS(roomId), status);
+            showToast('Estado actualizado correctamente', 'success');
+        } else {
+            // OFFLINE: Guardar localmente para sincronizar después
+            await dbService.updateRoomStatusLocal(roomId, status);
+            showToast('💾 Estado guardado localmente. Se sincronizará al conectar.', 'warning');
+        }
 
         // Recargar habitaciones
         await loadMyRooms();
@@ -181,3 +231,96 @@ function showToast(message, type = 'info') {
     
     setTimeout(() => toast.remove(), 3000);
 }
+
+// Indicador de conectividad en el header
+function updateConnectivityIndicator() {
+    const header = document.querySelector('.mobile-header .d-flex');
+    if (!header) return;
+
+    // Remover indicador anterior si existe
+    const existing = header.querySelector('.connectivity-indicator');
+    if (existing) existing.remove();
+
+    // Crear nuevo indicador
+    const indicator = document.createElement('div');
+    indicator.className = 'connectivity-indicator d-flex align-items-center gap-2';
+    
+    if (navigator.onLine) {
+        indicator.innerHTML = '<span class="badge bg-success">🌐 En línea</span>';
+    } else {
+        indicator.innerHTML = '<span class="badge bg-warning">📵 Offline</span>';
+    }
+
+    header.appendChild(indicator);
+}
+
+// ============ WEBSOCKET REAL-TIME UPDATES ============
+function setupWebSocket() {
+    wsClient.connect(() => {
+        console.log('🔌 WebSocket conectado - Suscribiendo a notificaciones...');
+        
+        // Suscribirse a actualizaciones de habitaciones
+        const roomsSub = wsClient.subscribe('/topic/rooms', (notification) => {
+            console.log('📨 Notificación de habitación:', notification);
+            handleRoomNotification(notification);
+        });
+        
+        // Suscribirse a nuevas incidencias
+        const incidentsSub = wsClient.subscribe('/topic/incidents', (notification) => {
+            console.log('📨 Notificación de incidencia:', notification);
+            handleIncidentNotification(notification);
+        });
+        
+        // Suscribirse a notificaciones generales
+        const notificationsSub = wsClient.subscribe('/topic/notifications', (notification) => {
+            console.log('📨 Notificación general:', notification);
+            showNotificationToast(notification);
+        });
+        
+        wsSubscriptions.push(roomsSub, incidentsSub, notificationsSub);
+    });
+}
+
+function handleRoomNotification(notification) {
+    const { type, data } = notification;
+    
+    // Si es una actualización de habitación que nos afecta, recargar
+    const userData = api.getUserData();
+    if (data.assignedTo && data.assignedTo.id === userData.userId) {
+        loadMyRooms();
+        showToast(`Habitación ${data.number} actualizada`, 'info');
+    }
+}
+
+function handleIncidentNotification(notification) {
+    const { type, message } = notification;
+    
+    if (type === 'INCIDENT_CREATED') {
+        // Reproducir sonido o mostrar notificación
+        showToast('⚠️ ' + message, 'warning');
+        
+        // Mostrar notificación del navegador si está permitido
+        if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('Nueva Incidencia', {
+                body: message,
+                icon: '/icon-192.png',
+                badge: '/icon-72.png'
+            });
+        }
+    }
+}
+
+function showNotificationToast(notification) {
+    const { message, type } = notification;
+    const alertType = type.includes('ERROR') ? 'danger' : 
+                      type.includes('WARNING') ? 'warning' : 
+                      type.includes('SUCCESS') ? 'success' : 'info';
+    
+    showToast(message, alertType);
+}
+
+// Limpiar WebSocket al salir
+window.addEventListener('beforeunload', () => {
+    wsSubscriptions.forEach(sub => wsClient.unsubscribe(sub));
+    wsClient.disconnect();
+});

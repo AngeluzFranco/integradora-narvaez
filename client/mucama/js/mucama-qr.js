@@ -1,10 +1,11 @@
 /* ======================================
-   MUCAMA-QR.JS - Escaneo QR y Auto-asignación
+   MUCAMA-QR.JS - Escaneo QR y Auto-asignación con Offline
    Backend: PUT /api/rooms/{id} - RoomController.updateRoom()
    ====================================== */
 
 import api from '../../js/api.js';
 import { ENDPOINTS, USER_ROLES } from '../../js/config.js';
+import dbService from './db-service.js';
 
 let qrScanner = null;
 let scannedRoomData = null;
@@ -19,6 +20,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (userData.role !== USER_ROLES.MAID) {
         window.location.href = '/index.html';
         return;
+    }
+
+    // Connectivity check
+    if (!navigator.onLine) {
+        showError('📴 Sin conexión. El escaneo QR requiere internet para asignar habitaciones.');
     }
 
     // Iniciar escáner QR
@@ -109,7 +115,7 @@ function showRoomResult(roomData) {
     `;
 }
 
-// Asignar habitación al usuario actual
+// Asignar habitación al usuario actual (con offline queue)
 // Backend: RoomController.updateRoom() - PUT /api/rooms/{id}
 async function assignRoom() {
     try {
@@ -118,6 +124,19 @@ async function assignRoom() {
         btn.textContent = 'Asignando...';
 
         const userData = api.getUserData();
+        
+        if (!navigator.onLine) {
+            // Guardar en queue para sync posterior
+            await dbService.addToSyncQueue({
+                type: 'ASSIGN_ROOM',
+                roomId: scannedRoomData.id,
+                userId: userData.userId,
+                timestamp: new Date().toISOString()
+            });
+            showSuccess('📴 Asignación guardada. Se sincronizará cuando haya conexión');
+            setTimeout(() => window.location.href = 'index.html', 2000);
+            return;
+        }
         
         // Obtener habitación actual del backend para preservar otros datos
         const room = await api.get(ENDPOINTS.ROOM_BY_ID(scannedRoomData.id));

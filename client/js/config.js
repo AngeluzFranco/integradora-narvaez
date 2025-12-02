@@ -27,6 +27,14 @@ export const ENDPOINTS = {
     INCIDENTS_BY_MAID: (mid) => `${API_URL}/incidents/maid/${mid}`,
     INCIDENTS_BY_STATUS: (status) => `${API_URL}/incidents/status/${status}`,
     INCIDENT_RESOLVE: (id) => `${API_URL}/incidents/${id}/resolve`, // PATCH - Resolver incidencia
+    
+    // UserController.java - /api/users
+    USERS: `${API_URL}/users`,                // GET/POST - Todos los usuarios
+    USER_BY_ID: (id) => `${API_URL}/users/${id}`,              // GET/PUT/DELETE
+    USERS_BY_ROLE: (role) => `${API_URL}/users/role/${role}`,  // GET - Por rol
+    USERS_BY_HOTEL: (hid) => `${API_URL}/users/hotel/${hid}`,  // GET - Por hotel
+    USERS_ACTIVE: `${API_URL}/users/active`,  // GET - Solo activos
+    USER_ACTIVATE: (id) => `${API_URL}/users/${id}/activate`,  // PATCH - Activar/desactivar
 };
 
 // Estados de habitaciones (Room.RoomStatus enum en backend)

@@ -2,7 +2,9 @@ package utex.edu.mx.server.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
+import utex.edu.mx.server.dto.WebSocketNotification;
 import utex.edu.mx.server.model.Incident;
 import utex.edu.mx.server.repository.IncidentRepository;
 
@@ -16,6 +18,7 @@ import java.util.List;
 public class IncidentController {
     
     private final IncidentRepository incidentRepository;
+    private final SimpMessagingTemplate messagingTemplate;
     
     @GetMapping
     public ResponseEntity<List<Incident>> getAllIncidents() {
@@ -48,7 +51,18 @@ public class IncidentController {
     public ResponseEntity<Incident> createIncident(@RequestBody Incident incident) {
         incident.setCreatedAt(LocalDateTime.now());
         incident.setUpdatedAt(LocalDateTime.now());
-        return ResponseEntity.ok(incidentRepository.save(incident));
+        Incident savedIncident = incidentRepository.save(incident);
+        
+        // Broadcast WebSocket notification
+        WebSocketNotification notification = new WebSocketNotification(
+            "INCIDENT_CREATED",
+            "Nueva incidencia reportada en Hab. " + (savedIncident.getRoom() != null ? savedIncident.getRoom().getNumber() : "N/A"),
+            savedIncident
+        );
+        messagingTemplate.convertAndSend("/topic/incidents", notification);
+        messagingTemplate.convertAndSend("/topic/notifications", notification);
+        
+        return ResponseEntity.ok(savedIncident);
     }
     
     @PutMapping("/{id}")
@@ -61,7 +75,17 @@ public class IncidentController {
                     incident.setResolutionNotes(incidentDetails.getResolutionNotes());
                     incident.setResolvedAt(incidentDetails.getResolvedAt());
                     incident.setUpdatedAt(LocalDateTime.now());
-                    return ResponseEntity.ok(incidentRepository.save(incident));
+                    Incident updatedIncident = incidentRepository.save(incident);
+                    
+                    // Broadcast WebSocket notification
+                    WebSocketNotification notification = new WebSocketNotification(
+                        "INCIDENT_UPDATED",
+                        "Incidencia actualizada",
+                        updatedIncident
+                    );
+                    messagingTemplate.convertAndSend("/topic/incidents", notification);
+                    
+                    return ResponseEntity.ok(updatedIncident);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -74,7 +98,18 @@ public class IncidentController {
                     incident.setResolutionNotes(resolutionNotes);
                     incident.setResolvedAt(LocalDateTime.now());
                     incident.setUpdatedAt(LocalDateTime.now());
-                    return ResponseEntity.ok(incidentRepository.save(incident));
+                    Incident resolvedIncident = incidentRepository.save(incident);
+                    
+                    // Broadcast WebSocket notification
+                    WebSocketNotification notification = new WebSocketNotification(
+                        "INCIDENT_RESOLVED",
+                        "Incidencia resuelta en Hab. " + (resolvedIncident.getRoom() != null ? resolvedIncident.getRoom().getNumber() : "N/A"),
+                        resolvedIncident
+                    );
+                    messagingTemplate.convertAndSend("/topic/incidents", notification);
+                    messagingTemplate.convertAndSend("/topic/notifications", notification);
+                    
+                    return ResponseEntity.ok(resolvedIncident);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

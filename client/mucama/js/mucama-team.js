@@ -1,11 +1,12 @@
 /* ======================================
-   MUCAMA-TEAM.JS - Vista Colaborativa Equipo
+   MUCAMA-TEAM.JS - Vista Colaborativa Equipo con Offline
    Backend: GET /api/rooms - RoomController.getAllRooms()
    Filtra y agrupa por mucama en frontend
    ====================================== */
 
 import api from '../../js/api.js';
 import { ENDPOINTS, USER_ROLES, ROOM_STATUS } from '../../js/config.js';
+import dbService from './db-service.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (!api.isAuthenticated()) {
@@ -19,18 +20,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    // Connectivity indicator
+    updateConnectivityIndicator();
+    window.addEventListener('online', () => {
+        updateConnectivityIndicator();
+        loadTeamRooms();
+    });
+    window.addEventListener('offline', updateConnectivityIndicator);
+
     await loadTeamRooms();
 
-    // Auto-refresh cada 60 segundos
-    setInterval(loadTeamRooms, 60000);
+    // Auto-refresh cada 60 segundos (solo online)
+    setInterval(() => {
+        if (navigator.onLine) loadTeamRooms();
+    }, 60000);
 });
 
-// Cargar todas las habitaciones y agrupar por mucama
+// Cargar todas las habitaciones y agrupar por mucama (con offline)
 // Backend: RoomController.getAllRooms() - GET /api/rooms
 async function loadTeamRooms() {
     try {
-        const allRooms = await api.get(ENDPOINTS.ROOMS);
         const userData = api.getUserData();
+        let allRooms;
+        
+        if (navigator.onLine) {
+            allRooms = await api.get(ENDPOINTS.ROOMS);
+            // Guardar en local para uso offline
+            await dbService.saveRoomsLocal(allRooms);
+        } else {
+            // Usar cache local
+            allRooms = await dbService.getRoomsLocal();
+            showToast('📴 Modo offline - usando datos guardados', 'info');
+        }
 
         // Filtrar solo habitaciones asignadas a mucamas (excluir la actual)
         const assignedRooms = allRooms.filter(room => 
@@ -54,7 +75,20 @@ async function loadTeamRooms() {
 
     } catch (error) {
         console.error('Error loading team rooms:', error);
-        showToast('Error al cargar información del equipo', 'danger');
+        // Intentar cargar desde cache
+        try {
+            const cachedRooms = await dbService.getRoomsLocal();
+            const userData = api.getUserData();
+            const assignedRooms = cachedRooms.filter(room => 
+                room.assignedTo && 
+                room.assignedTo.id !== userData.userId &&
+                room.assignedTo.role === USER_ROLES.MAID
+            );
+            const roomsByMaid = groupRoomsByMaid(assignedRooms);
+            renderTeamView(roomsByMaid);
+        } catch (e) {
+            showToast('Error al cargar información del equipo', 'danger');
+        }
     }
 }
 
@@ -128,4 +162,19 @@ function showToast(message, type = 'info') {
     document.body.appendChild(toast);
     
     setTimeout(() => toast.remove(), 3000);
+}
+
+function updateConnectivityIndicator() {
+    const header = document.querySelector('.top-bar h3');
+    if (!header) return;
+    
+    const existingBadge = header.querySelector('.connectivity-badge');
+    if (existingBadge) existingBadge.remove();
+    
+    if (!navigator.onLine) {
+        const badge = document.createElement('span');
+        badge.className = 'badge bg-warning text-dark ms-2 connectivity-badge';
+        badge.textContent = '📴 Offline';
+        header.appendChild(badge);
+    }
 }

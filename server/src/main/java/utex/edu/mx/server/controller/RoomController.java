@@ -2,7 +2,9 @@ package utex.edu.mx.server.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
+import utex.edu.mx.server.dto.WebSocketNotification;
 import utex.edu.mx.server.model.Room;
 import utex.edu.mx.server.repository.RoomRepository;
 
@@ -16,6 +18,7 @@ import java.util.List;
 public class RoomController {
     
     private final RoomRepository roomRepository;
+    private final SimpMessagingTemplate messagingTemplate;
     
     @GetMapping
     public ResponseEntity<List<Room>> getAllRooms() {
@@ -61,7 +64,17 @@ public class RoomController {
                     room.setAssignedTo(roomDetails.getAssignedTo());
                     room.setAssignedAt(roomDetails.getAssignedAt());
                     room.setUpdatedAt(LocalDateTime.now());
-                    return ResponseEntity.ok(roomRepository.save(room));
+                    Room updatedRoom = roomRepository.save(room);
+                    
+                    // Broadcast WebSocket notification
+                    WebSocketNotification notification = new WebSocketNotification(
+                        "ROOM_UPDATED",
+                        "Habitación " + updatedRoom.getNumber() + " actualizada",
+                        updatedRoom
+                    );
+                    messagingTemplate.convertAndSend("/topic/rooms", notification);
+                    
+                    return ResponseEntity.ok(updatedRoom);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -72,7 +85,18 @@ public class RoomController {
                 .map(room -> {
                     room.setStatus(status);
                     room.setUpdatedAt(LocalDateTime.now());
-                    return ResponseEntity.ok(roomRepository.save(room));
+                    Room updatedRoom = roomRepository.save(room);
+                    
+                    // Broadcast WebSocket notification
+                    WebSocketNotification notification = new WebSocketNotification(
+                        "ROOM_STATUS_CHANGED",
+                        "Habitación " + updatedRoom.getNumber() + " ahora está " + status,
+                        updatedRoom
+                    );
+                    messagingTemplate.convertAndSend("/topic/rooms", notification);
+                    messagingTemplate.convertAndSend("/topic/notifications", notification);
+                    
+                    return ResponseEntity.ok(updatedRoom);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
