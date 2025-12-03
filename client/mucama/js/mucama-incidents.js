@@ -37,14 +37,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Cargar habitaciones asignadas (para el selector)
     await loadMyRooms();
 
+    // Verificar si viene de reportar incidencia desde el dashboard
+    checkPendingIncidentRoom();
+
     // Cargar incidencias
     await loadIncidents();
 
     // Setup listeners
     setupFilterButtons();
-    setupNewIncidentButton();
+    // setupNewIncidentButton(); // Botón eliminado de la UI
     setupIncidentForm();
     setupPhotoUpload();
+    setupCameraButtons();
 
     // Auto-refresh cada 30 segundos (solo online)
     setInterval(() => {
@@ -86,6 +90,33 @@ function populateRoomSelector() {
         myRooms.map(room => `
             <option value="${room.id}">Hab. ${room.number} - ${room.building?.name || ''}</option>
         `).join('');
+}
+
+// Verificar si hay una habitación pendiente para reportar incidencia
+function checkPendingIncidentRoom() {
+    const pendingRoom = sessionStorage.getItem('pendingIncidentRoom');
+    if (pendingRoom) {
+        try {
+            const room = JSON.parse(pendingRoom);
+            // Pre-llenar el campo de habitación
+            document.getElementById('incidentRoom').value = room.id;
+            document.getElementById('incidentRoomDisplay').value = `Habitación ${room.number}`;
+            
+            // Limpiar sessionStorage
+            sessionStorage.removeItem('pendingIncidentRoom');
+            
+            // Abrir modal automáticamente
+            setTimeout(() => {
+                const modal = new bootstrap.Modal(document.getElementById('newIncidentModal'));
+                modal.show();
+                
+                // Enfocar en el campo de descripción
+                document.getElementById('incidentDescription').focus();
+            }, 300);
+        } catch (error) {
+            console.error('Error loading pending room:', error);
+        }
+    }
 }
 
 // Cargar incidencias de esta mucama (con offline)
@@ -136,8 +167,11 @@ function renderIncidents(incidents) {
     }
 
     emptyState.classList.add('d-none');
-    container.innerHTML = incidents.map(incident => `
-        <div class="incident-card incident-severity-${incident.severity}" 
+    container.innerHTML = incidents.map(incident => {
+        const photoCount = incident.photos ? parsePhotos(incident.photos).length : 0;
+        
+        return `
+        <div class="incident-card" 
              onclick="viewIncidentDetail(${incident.id})">
             <div class="d-flex justify-content-between align-items-start mb-2">
                 <div>
@@ -146,24 +180,27 @@ function renderIncidents(incidents) {
                         ${incident.status === 'OPEN' ? 'Abierta' : 'Resuelta'}
                     </span>
                 </div>
-                <span class="badge bg-secondary">${getSeverityText(incident.severity)}</span>
             </div>
             
             <p class="mb-2">${truncateText(incident.description, 100)}</p>
             
-            ${incident.photos ? `
-                <div class="incident-photos">
-                    ${parsePhotos(incident.photos).map(photo => `
-                        <img src="${photo}" class="incident-photo" alt="Foto incidencia">
-                    `).join('')}
+            ${photoCount > 0 ? `
+                <div class="mb-2">
+                    <small class="text-muted">
+                        📷 ${photoCount} foto${photoCount > 1 ? 's' : ''} adjunta${photoCount > 1 ? 's' : ''}
+                    </small>
                 </div>
             ` : ''}
             
-            <small class="text-muted">
+            <small class="text-muted d-block">
                 ${formatDate(incident.createdAt)}
             </small>
+            <small class="text-primary">
+                👆 Toca para ver detalles
+            </small>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 // Setup filtros
@@ -179,13 +216,13 @@ function setupFilterButtons() {
     });
 }
 
-// Setup botón nueva incidencia
-function setupNewIncidentButton() {
-    document.getElementById('newIncidentBtn').addEventListener('click', () => {
-        const modal = new bootstrap.Modal(document.getElementById('newIncidentModal'));
-        modal.show();
-    });
-}
+// Setup botón nueva incidencia - DESHABILITADO (botón eliminado de UI)
+// function setupNewIncidentButton() {
+//     document.getElementById('newIncidentBtn').addEventListener('click', () => {
+//         const modal = new bootstrap.Modal(document.getElementById('newIncidentModal'));
+//         modal.show();
+//     });
+// }
 
 // Setup formulario de nueva incidencia
 function setupIncidentForm() {
@@ -202,10 +239,19 @@ async function createIncident() {
         const userData = api.getUserData();
         const roomId = document.getElementById('incidentRoom').value;
         const description = document.getElementById('incidentDescription').value;
-        const severity = document.getElementById('incidentSeverity').value;
 
         if (!roomId) {
             showToast('Seleccione una habitación', 'warning');
+            return;
+        }
+
+        if (!description.trim()) {
+            showToast('Ingrese una descripción del problema', 'warning');
+            return;
+        }
+
+        if (selectedPhotos.length === 0) {
+            showToast('Debe tomar al menos una foto del problema', 'warning');
             return;
         }
 
@@ -218,24 +264,37 @@ async function createIncident() {
             room: { id: parseInt(roomId) },
             reportedBy: { id: userData.userId },
             description: description,
-            severity: severity,
             status: INCIDENT_STATUS.OPEN,
             photos: JSON.stringify(photosBase64)
         };
 
-        if (navigator.onLine) {
-            // Enviar directamente
-            await api.post(ENDPOINTS.INCIDENTS, incidentData);
-            showToast('Incidencia registrada correctamente', 'success');
-        } else {
-            // Guardar en local para sync posterior
-            await dbService.createIncidentLocal(incidentData);
-            showToast('📴 Incidencia guardada. Se sincronizará cuando haya conexión', 'warning');
+        // Verificar conectividad antes de intentar enviar
+        try {
+            if (navigator.onLine) {
+                // Intentar enviar directamente
+                await api.post(ENDPOINTS.INCIDENTS, incidentData);
+                showToast('Incidencia registrada correctamente', 'success');
+            } else {
+                // Sin conexión, guardar localmente
+                await dbService.createIncidentLocal(incidentData);
+                showToast('📴 Incidencia guardada. Se sincronizará cuando haya conexión', 'warning');
+            }
+        } catch (apiError) {
+            // Si falla la petición (ej: servidor caído), guardar localmente
+            console.log('Error en API, guardando localmente:', apiError);
+            try {
+                await dbService.createIncidentLocal(incidentData);
+                showToast('📴 Incidencia guardada localmente. Se sincronizará cuando haya conexión', 'warning');
+            } catch (dbError) {
+                console.error('Error guardando localmente:', dbError);
+                showToast('Error al guardar incidencia', 'danger');
+                return; // Salir sin cerrar el modal para que el usuario pueda reintentar
+            }
         }
 
         // Cerrar modal y resetear
         const modal = bootstrap.Modal.getInstance(document.getElementById('newIncidentModal'));
-        modal.hide();
+        if (modal) modal.hide();
         resetIncidentForm();
 
         // Recargar lista
@@ -247,20 +306,115 @@ async function createIncident() {
     }
 }
 
-// Setup carga de fotos
-function setupPhotoUpload() {
-    const input = document.getElementById('incidentPhotos');
-    input.addEventListener('change', (e) => {
-        const files = Array.from(e.target.files);
-        
-        if (files.length + selectedPhotos.length > 3) {
+// Variables para la cámara
+let cameraStream = null;
+let currentFacingMode = 'environment';
+
+// Setup botones de cámara
+function setupCameraButtons() {
+    // Botón cámara trasera
+    const btnBack = document.getElementById('takePrimaryPhoto');
+    btnBack.addEventListener('click', () => {
+        if (selectedPhotos.length >= 3) {
             showToast('Máximo 3 fotos permitidas', 'warning');
             return;
         }
-
-        selectedPhotos.push(...files);
-        renderPhotoPreview();
+        openCamera('environment');
     });
+    
+    // Botón cámara frontal
+    const btnFront = document.getElementById('takeSelfiePhoto');
+    btnFront.addEventListener('click', () => {
+        if (selectedPhotos.length >= 3) {
+            showToast('Máximo 3 fotos permitidas', 'warning');
+            return;
+        }
+        openCamera('user');
+    });
+    
+    // Botón capturar foto
+    const captureBtn = document.getElementById('capturePhotoBtn');
+    captureBtn.addEventListener('click', capturePhoto);
+    
+    // Botón cerrar cámara
+    const closeBtn = document.getElementById('closeCameraBtn');
+    closeBtn.addEventListener('click', closeCamera);
+}
+
+// Abrir cámara con MediaDevices API
+async function openCamera(facingMode) {
+    try {
+        currentFacingMode = facingMode;
+        
+        const constraints = {
+            video: {
+                facingMode: { ideal: facingMode },
+                width: { ideal: 1280, max: 1920 },
+                height: { ideal: 720, max: 1080 }
+            }
+        };
+        
+        cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        const video = document.getElementById('cameraVideo');
+        video.srcObject = cameraStream;
+        
+        // Mostrar visor de cámara
+        document.getElementById('cameraView').classList.remove('d-none');
+        
+        console.log('Cámara abierta:', facingMode === 'environment' ? 'Trasera' : 'Frontal');
+    } catch (error) {
+        console.error('Error al abrir cámara:', error);
+        showToast('No se pudo acceder a la cámara. Verifica los permisos.', 'danger');
+    }
+}
+
+// Capturar foto desde el video
+function capturePhoto() {
+    const video = document.getElementById('cameraVideo');
+    const canvas = document.getElementById('photoCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Configurar canvas al tamaño del video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    // Dibujar frame actual del video en el canvas
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Convertir canvas a blob
+    canvas.toBlob((blob) => {
+        if (blob) {
+            // Crear un File object desde el blob
+            const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            selectedPhotos.push(file);
+            renderPhotoPreview();
+            
+            // Cerrar cámara
+            closeCamera();
+            
+            showToast('✅ Foto capturada correctamente', 'success');
+        }
+    }, 'image/jpeg', 0.9);
+}
+
+// Cerrar cámara
+function closeCamera() {
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+    }
+    
+    const video = document.getElementById('cameraVideo');
+    video.srcObject = null;
+    
+    document.getElementById('cameraView').classList.add('d-none');
+}
+
+// Setup carga de fotos (legacy - ya no se usa pero lo dejamos por compatibilidad)
+function setupPhotoUpload() {
+    // Esta función se mantiene vacía o puede eliminarse
+    // La funcionalidad ahora está en setupCameraButtons
 }
 
 function renderPhotoPreview() {
@@ -317,8 +471,14 @@ async function compressAndConvertToBase64(file) {
 
 function resetIncidentForm() {
     document.getElementById('incidentForm').reset();
+    document.getElementById('incidentRoom').value = '';
+    document.getElementById('incidentRoomDisplay').value = '';
+    document.getElementById('incidentDescription').value = '';
     selectedPhotos = [];
     renderPhotoPreview();
+    
+    // Cerrar cámara si está abierta
+    closeCamera();
 }
 
 // Ver detalle de incidencia
@@ -338,11 +498,6 @@ window.viewIncidentDetail = async (incidentId) => {
                     <span class="badge ${incident.status === 'OPEN' ? 'badge-open' : 'badge-resolved'}">
                         ${incident.status === 'OPEN' ? 'Abierta' : 'Resuelta'}
                     </span>
-                </div>
-                
-                <div class="mb-3">
-                    <h6>Severidad</h6>
-                    <span class="badge bg-secondary">${getSeverityText(incident.severity)}</span>
                 </div>
                 
                 <div class="mb-3">
@@ -392,15 +547,6 @@ function parsePhotos(photosJson) {
     } catch {
         return [];
     }
-}
-
-function getSeverityText(severity) {
-    const map = {
-        'LOW': 'Baja',
-        'MEDIUM': 'Media',
-        'HIGH': 'Alta'
-    };
-    return map[severity] || severity;
 }
 
 function truncateText(text, maxLength) {

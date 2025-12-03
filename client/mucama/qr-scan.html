@@ -14,7 +14,7 @@
 
     <header class="mobile-header">
         <div class="d-flex justify-content-between align-items-center px-3 py-2">
-            <h5 class="mb-0 text-white">Escanear QR</h5>
+            <h5 class="mb-0 page-title">Escanear QR</h5>
             <a href="index.html" class="btn btn-sm btn-outline-light">Volver</a>
         </div>
     </header>
@@ -22,23 +22,28 @@
     <main class="mobile-content">
         <div class="p-3">
             <div class="alert alert-info mb-3">
-                <strong>📱 Instrucciones:</strong><br>
-                Escanea el código QR de la habitación para auto-asignártela y comenzar a trabajar.
+                <strong>📱 Escanear Habitación:</strong><br>
+                Escanea el código QR para acceder rápidamente a cualquier habitación.
             </div>
 
             <!-- Visor de cámara QR -->
             <div id="qr-reader" class="mb-3"></div>
 
-            <!-- Resultado del escaneo -->
-            <div id="qr-result" class="d-none">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Habitación Detectada</h5>
-                        <p id="qr-room-info"></p>
-                        <button class="btn btn-primary w-100" id="assignRoomBtn">
-                            Auto-asignarme esta Habitación
+            <!-- Búsqueda manual alternativa -->
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h6 class="card-title mb-3">🔍 Búsqueda Manual</h6>
+                    <div class="input-group">
+                        <input type="text" class="form-control form-control-lg" 
+                               id="manualRoomSearch" 
+                               placeholder="Ej: 101, 205, 3A">
+                        <button class="btn btn-primary" id="searchRoomBtn">
+                            Buscar
                         </button>
                     </div>
+                    <small class="text-muted d-block mt-2">
+                        Ingresa el número de habitación para buscarla directamente
+                    </small>
                 </div>
             </div>
 

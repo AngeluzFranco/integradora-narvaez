@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupFilters();
     setupNewRoomButton();
     setupRoomForm();
+    setupDailyResetButton();
 });
 
 // Cargar edificios (necesario para el backend, aunque no hay BuildingController expuesto)
@@ -112,6 +113,9 @@ function renderRooms(rooms) {
             <td>${room.assignedTo?.name || '<span class="text-muted">Sin asignar</span>'}</td>
             <td>${formatDate(room.updatedAt)}</td>
             <td>
+                <button class="btn btn-sm btn-outline-info btn-action" onclick="reassignRoom(${room.id}, '${room.number}')" title="Reasignar mucama">
+                    👤
+                </button>
                 <button class="btn btn-sm btn-outline-primary btn-action" onclick="editRoom(${room.id})">
                     Editar
                 </button>
@@ -282,6 +286,111 @@ function formatDate(dateString) {
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
+    });
+}
+
+// Setup botón de reinicio diario
+function setupDailyResetButton() {
+    document.getElementById('dailyResetBtn').addEventListener('click', async () => {
+        if (!confirm('¿Marcar todas las habitaciones limpias como sucias?\n\nEsta acción simula el reinicio automático de las 8 AM.')) {
+            return;
+        }
+
+        try {
+            const response = await api.post(ENDPOINTS.ROOMS_RESET, {});
+            showToast(`✅ ${response.message}`, 'success');
+            await loadRooms();
+        } catch (error) {
+            console.error('Error en reinicio diario:', error);
+            showToast('Error al ejecutar reinicio diario', 'danger');
+        }
+    });
+}
+
+// Reasignar habitación a otra mucama
+window.reassignRoom = async (roomId, roomNumber) => {
+    try {
+        // Cargar lista de mucamas
+        const allUsers = await api.get(ENDPOINTS.USERS);
+        const maids = allUsers.filter(u => u.role === USER_ROLES.MAID);
+
+        if (maids.length === 0) {
+            showToast('No hay mucamas disponibles', 'warning');
+            return;
+        }
+
+        // Crear selector de mucamas
+        const options = [
+            '<option value="">Sin asignar</option>',
+            ...maids.map(m => `<option value="${m.id}">${m.name} - ${m.username}</option>`)
+        ].join('');
+
+        const result = await showSelectDialog(
+            `Reasignar Habitación ${roomNumber}`,
+            'Seleccione la nueva mucama asignada:',
+            options
+        );
+
+        if (result === null) return; // Usuario canceló
+
+        const maidId = result === '' ? null : parseInt(result);
+        
+        await api.patch(ENDPOINTS.ROOM_ASSIGN(roomId), { maidId });
+        showToast(
+            maidId ? 'Habitación reasignada correctamente' : 'Asignación eliminada',
+            'success'
+        );
+        await loadRooms();
+
+    } catch (error) {
+        console.error('Error reasignando habitación:', error);
+        showToast('Error al reasignar habitación', 'danger');
+    }
+};
+
+// Helper: Mostrar diálogo con selector
+function showSelectDialog(title, message, optionsHTML) {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.innerHTML = `
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">${title}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>${message}</p>
+                        <select class="form-select" id="selectDialogValue">
+                            ${optionsHTML}
+                        </select>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" id="confirmSelect">Confirmar</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        const bsModal = new bootstrap.Modal(modal);
+        
+        modal.querySelector('#confirmSelect').addEventListener('click', () => {
+            const value = modal.querySelector('#selectDialogValue').value;
+            bsModal.hide();
+            resolve(value);
+        });
+
+        modal.addEventListener('hidden.bs.modal', () => {
+            modal.remove();
+            if (!modal.querySelector('#confirmSelect').dataset.clicked) {
+                resolve(null);
+            }
+        });
+
+        bsModal.show();
     });
 }
 

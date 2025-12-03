@@ -3,7 +3,7 @@
    Maneja sincronización bidireccional con backend
    ====================================== */
 
-import { STORAGE_KEYS } from '../../js/config.js';
+import { STORAGE_KEYS, ENDPOINTS } from '../../js/config.js';
 
 class DatabaseService {
     constructor() {
@@ -58,7 +58,7 @@ class DatabaseService {
             const docs = rooms.map(room => ({
                 _id: `room_${room.id}`,
                 ...room,
-                _localUpdated: Date.now()
+                localUpdated: Date.now()
             }));
 
             for (const doc of docs) {
@@ -103,8 +103,8 @@ class DatabaseService {
             const doc = await this.roomsDB.get(`room_${roomId}`);
             doc.status = status;
             doc.updatedAt = new Date().toISOString();
-            doc._localUpdated = Date.now();
-            doc._pendingSync = true;
+            doc.localUpdated = Date.now();
+            doc.pendingSync = true;
 
             await this.roomsDB.put(doc);
 
@@ -112,8 +112,9 @@ class DatabaseService {
             await this.addToSyncQueue({
                 type: 'ROOM_STATUS',
                 action: 'PATCH',
-                endpoint: `/api/rooms/${roomId}/status`,
+                endpoint: ENDPOINTS.ROOM_STATUS(roomId),
                 data: status,
+                roomId: roomId,
                 timestamp: Date.now()
             });
 
@@ -134,7 +135,7 @@ class DatabaseService {
             const docs = incidents.map(inc => ({
                 _id: `incident_${inc.id || Date.now()}_${Math.random()}`,
                 ...inc,
-                _localUpdated: Date.now()
+                localUpdated: Date.now()
             }));
 
             for (const doc of docs) {
@@ -180,9 +181,9 @@ class DatabaseService {
                 _id: `incident_temp_${Date.now()}`,
                 ...incidentData,
                 createdAt: new Date().toISOString(),
-                _localCreated: true,
-                _pendingSync: true,
-                _localUpdated: Date.now()
+                localCreated: true,
+                pendingSync: true,
+                localUpdated: Date.now()
             };
 
             await this.incidentsDB.put(doc);
@@ -191,7 +192,7 @@ class DatabaseService {
             await this.addToSyncQueue({
                 type: 'INCIDENT_CREATE',
                 action: 'POST',
-                endpoint: '/api/incidents',
+                endpoint: ENDPOINTS.INCIDENTS,
                 data: incidentData,
                 tempId: doc._id,
                 timestamp: Date.now()
@@ -213,8 +214,8 @@ class DatabaseService {
         try {
             await this.syncDB.post({
                 ...item,
-                _addedAt: Date.now(),
-                _synced: false
+                addedAt: Date.now(),
+                synced: false
             });
 
             this.pendingChanges.push(item);
@@ -239,8 +240,8 @@ class DatabaseService {
             const result = await this.syncDB.allDocs({ include_docs: true });
             const pending = result.rows
                 .map(row => row.doc)
-                .filter(doc => !doc._synced)
-                .sort((a, b) => a._addedAt - b._addedAt);
+                .filter(doc => !doc.synced)
+                .sort((a, b) => a.addedAt - b.addedAt);
 
             console.log(`📋 ${pending.length} cambios pendientes de sincronización`);
 
@@ -249,8 +250,8 @@ class DatabaseService {
                     await this.syncItem(item);
                     
                     // Marcar como sincronizado
-                    item._synced = true;
-                    item._syncedAt = Date.now();
+                    item.synced = true;
+                    item.syncedAt = Date.now();
                     await this.syncDB.put(item);
 
                     console.log(`✅ Sincronizado: ${item.type}`);
@@ -279,10 +280,16 @@ class DatabaseService {
             case 'ROOM_STATUS':
                 await api.patch(item.endpoint, item.data);
                 // Actualizar documento local
-                const roomId = item.endpoint.split('/').pop().split('?')[0];
-                const roomDoc = await this.roomsDB.get(`room_${roomId}`);
-                delete roomDoc._pendingSync;
-                await this.roomsDB.put(roomDoc);
+                const roomId = item.roomId;
+                if (roomId && this.roomsDB) {
+                    try {
+                        const roomDoc = await this.roomsDB.get(`room_${roomId}`);
+                        delete roomDoc.pendingSync;
+                        await this.roomsDB.put(roomDoc);
+                    } catch (err) {
+                        console.log('Documento de habitación no encontrado localmente:', err);
+                    }
+                }
                 break;
 
             case 'INCIDENT_CREATE':
@@ -295,7 +302,7 @@ class DatabaseService {
                     await this.incidentsDB.put({
                         _id: `incident_${newIncident.id}`,
                         ...newIncident,
-                        _localUpdated: Date.now()
+                        localUpdated: Date.now()
                     });
                 }
                 break;
@@ -314,7 +321,7 @@ class DatabaseService {
             
             for (const row of result.rows) {
                 const doc = row.doc;
-                if (doc._synced && doc._syncedAt < sevenDaysAgo) {
+                if (doc.synced && doc.syncedAt < sevenDaysAgo) {
                     await this.syncDB.remove(doc);
                 }
             }
@@ -343,10 +350,10 @@ class DatabaseService {
 
             // Sincronizar habitaciones
             if (userData.role === 'MAID') {
-                const rooms = await api.get(`/api/rooms/maid/${userData.userId}`);
+                const rooms = await api.get(ENDPOINTS.ROOMS_BY_MAID(userData.userId));
                 await this.saveRoomsLocal(rooms);
 
-                const incidents = await api.get(`/api/incidents/maid/${userData.userId}`);
+                const incidents = await api.get(ENDPOINTS.INCIDENTS_BY_MAID(userData.userId));
                 await this.saveIncidentsLocal(incidents);
             }
 
@@ -394,7 +401,7 @@ class DatabaseService {
 
         try {
             const result = await this.syncDB.allDocs({ include_docs: true });
-            const pending = result.rows.filter(row => !row.doc._synced);
+            const pending = result.rows.filter(row => !row.doc.synced);
 
             return {
                 isOnline: this.isOnline,

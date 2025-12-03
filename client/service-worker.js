@@ -75,9 +75,15 @@ self.addEventListener('fetch', (event) => {
         return;
     }
     
-    // Solo cachear GET requests (PUT/POST/DELETE pasan directo)
+    // Para requests POST/PUT/PATCH/DELETE, intentar red y si falla, simplemente fallar
+    // (no cachear, dejamos que la app maneje offline con IndexedDB)
     if (request.method !== 'GET') {
-        event.respondWith(fetch(request));
+        event.respondWith(
+            fetch(request).catch(error => {
+                console.log('Fetch failed for non-GET request, app will handle offline:', error);
+                return Promise.reject(error);
+            })
+        );
         return;
     }
     

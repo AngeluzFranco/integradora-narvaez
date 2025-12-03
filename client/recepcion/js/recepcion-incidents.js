@@ -60,7 +60,7 @@ function renderIncidents(incidents) {
     const tbody = document.getElementById('incidentsTableBody');
     
     if (incidents.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No hay incidencias</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay incidencias</td></tr>';
         return;
     }
 
@@ -69,7 +69,6 @@ function renderIncidents(incidents) {
             <td><strong>#${incident.id}</strong></td>
             <td>${incident.room?.number || 'N/A'}</td>
             <td>${truncateText(incident.description, 50)}</td>
-            <td><span class="badge severity-${incident.severity}">${getSeverityText(incident.severity)}</span></td>
             <td>${incident.reportedBy?.name || 'N/A'}</td>
             <td>
                 <span class="badge ${incident.status === 'OPEN' ? 'badge-open' : 'badge-resolved'}">
@@ -94,17 +93,14 @@ function renderIncidents(incidents) {
 // Setup filtros
 function setupFilters() {
     const statusFilter = document.getElementById('filterStatus');
-    const severityFilter = document.getElementById('filterSeverity');
     const searchInput = document.getElementById('searchIncident');
     const clearBtn = document.getElementById('clearFilters');
 
     statusFilter.addEventListener('change', applyFilters);
-    severityFilter.addEventListener('change', applyFilters);
     searchInput.addEventListener('input', applyFilters);
 
     clearBtn.addEventListener('click', () => {
         statusFilter.value = 'OPEN';
-        severityFilter.value = '';
         searchInput.value = '';
         applyFilters();
     });
@@ -116,11 +112,6 @@ function applyFilters() {
     const status = document.getElementById('filterStatus').value;
     if (status) {
         filtered = filtered.filter(i => i.status === status);
-    }
-
-    const severity = document.getElementById('filterSeverity').value;
-    if (severity) {
-        filtered = filtered.filter(i => i.severity === severity);
     }
 
     const search = document.getElementById('searchIncident').value.toLowerCase();
@@ -189,10 +180,6 @@ window.viewDetail = async (incidentId) => {
                     ${incident.reportedBy?.name || 'N/A'}
                 </div>
                 <div class="col-md-6">
-                    <strong>Severidad:</strong><br>
-                    <span class="badge severity-${incident.severity}">${getSeverityText(incident.severity)}</span>
-                </div>
-                <div class="col-md-6">
                     <strong>Estado:</strong><br>
                     <span class="badge ${incident.status === 'OPEN' ? 'badge-open' : 'badge-resolved'}">
                         ${incident.status === 'OPEN' ? 'Abierta' : 'Resuelta'}
@@ -246,15 +233,6 @@ function parsePhotos(photosJson) {
     } catch {
         return [];
     }
-}
-
-function getSeverityText(severity) {
-    const map = {
-        'HIGH': 'Alta',
-        'MEDIUM': 'Media',
-        'LOW': 'Baja'
-    };
-    return map[severity] || severity;
 }
 
 function truncateText(text, maxLength) {

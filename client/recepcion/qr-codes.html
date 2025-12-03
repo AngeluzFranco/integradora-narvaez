@@ -51,11 +51,6 @@
             </div>
         </div>
 
-        <div class="alert alert-info mb-3">
-            <strong>ℹ️ Información:</strong> Los códigos QR generados tienen una validez de 30 días. 
-            Las mucamas pueden escanearlos para auto-asignarse habitaciones.
-        </div>
-
         <!-- Filters -->
         <div class="card mb-3">
             <div class="card-body">
@@ -80,6 +75,36 @@
             <div class="card-body">
                 <div id="qrCodesGrid" class="qr-grid">
                     <p class="text-center w-100">Cargando habitaciones...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para vista ampliada de QR -->
+    <div class="modal fade" id="qrModal" tabindex="-1" aria-labelledby="qrModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="qrModalLabel">Código QR - Habitación</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <div id="qrModalContainer" class="mb-3"></div>
+                    <div id="qrModalInfo">
+                        <p class="mb-1"><strong>Habitación:</strong> <span id="modalRoomNumber"></span></p>
+                        <p class="mb-1"><strong>Edificio:</strong> <span id="modalBuildingName"></span></p>
+                        <p class="mb-1"><strong>Piso:</strong> <span id="modalFloor"></span></p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-primary" id="downloadQRBtn">
+                        <svg width="16" height="16" fill="currentColor" class="bi bi-download" viewBox="0 0 16 16">
+                            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+                        </svg>
+                        Descargar
+                    </button>
                 </div>
             </div>
         </div>

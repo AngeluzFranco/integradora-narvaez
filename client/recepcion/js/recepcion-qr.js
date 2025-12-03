@@ -83,6 +83,7 @@ function renderQRCodes(rooms) {
         const qrItem = document.createElement('div');
         qrItem.className = 'qr-item';
         qrItem.id = `qr-${room.id}`;
+        qrItem.style.cursor = 'pointer';
         
         const qrData = JSON.stringify({
             id: room.id,
@@ -97,6 +98,9 @@ function renderQRCodes(rooms) {
             <div class="qr-item-label">Habitación ${room.number}</div>
             <small class="text-muted">${room.building?.name || ''}</small>
         `;
+
+        // Click event para abrir modal
+        qrItem.addEventListener('click', () => openQRModal(room, qrData));
 
         container.appendChild(qrItem);
 
@@ -165,6 +169,72 @@ function setupButtons() {
     document.getElementById('printBtn').addEventListener('click', () => {
         window.print();
     });
+}
+
+// Abrir modal con QR ampliado
+function openQRModal(room, qrData) {
+    // Actualizar información
+    document.getElementById('qrModalLabel').textContent = `Código QR - Habitación ${room.number}`;
+    document.getElementById('modalRoomNumber').textContent = room.number;
+    document.getElementById('modalBuildingName').textContent = room.building?.name || 'N/A';
+    document.getElementById('modalFloor').textContent = room.floor || 'N/A';
+
+    // Limpiar contenedor previo
+    const container = document.getElementById('qrModalContainer');
+    container.innerHTML = '';
+
+    // Generar QR más grande en el modal
+    try {
+        new QRCode(container, {
+            text: qrData,
+            width: 300,
+            height: 300,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H // Mayor nivel de corrección para QR grande
+        });
+    } catch (error) {
+        console.error('Error generating modal QR:', error);
+        container.innerHTML = '<span class="text-danger">Error al generar código QR</span>';
+    }
+
+    // Configurar botón de descarga
+    const downloadBtn = document.getElementById('downloadQRBtn');
+    downloadBtn.onclick = () => downloadQR(room);
+
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('qrModal'));
+    modal.show();
+}
+
+// Descargar código QR como imagen
+function downloadQR(room) {
+    const container = document.getElementById('qrModalContainer');
+    const canvas = container.querySelector('canvas');
+    
+    if (!canvas) {
+        showToast('No se pudo generar la imagen', 'danger');
+        return;
+    }
+
+    try {
+        // Convertir canvas a blob y descargar
+        canvas.toBlob((blob) => {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `QR_Habitacion_${room.number}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            showToast(`QR de habitación ${room.number} descargado`, 'success');
+        });
+    } catch (error) {
+        console.error('Error downloading QR:', error);
+        showToast('Error al descargar el código QR', 'danger');
+    }
 }
 
 function showToast(message, type = 'info') {

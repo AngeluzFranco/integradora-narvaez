@@ -1,6 +1,6 @@
 /* ======================================
-   MUCAMA-QR.JS - Escaneo QR y Auto-asignación con Offline
-   Backend: PUT /api/rooms/{id} - RoomController.updateRoom()
+   MUCAMA-QR.JS - Escaneo QR para Acceso Rápido a Habitaciones
+   Backend: GET /api/rooms/{id} - RoomController.getRoomById()
    ====================================== */
 
 import api from '../../js/api.js';
@@ -8,7 +8,6 @@ import { ENDPOINTS, USER_ROLES } from '../../js/config.js';
 import dbService from './db-service.js';
 
 let qrScanner = null;
-let scannedRoomData = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (!api.isAuthenticated()) {
@@ -24,14 +23,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Connectivity check
     if (!navigator.onLine) {
-        showError('📴 Sin conexión. El escaneo QR requiere internet para asignar habitaciones.');
+        showError('📴 Sin conexión. El escaneo QR requiere internet.');
     }
 
     // Iniciar escáner QR
     await initQRScanner();
 
-    // Setup botón de asignación
-    document.getElementById('assignRoomBtn').addEventListener('click', assignRoom);
+    // Setup búsqueda manual
+    document.getElementById('searchRoomBtn').addEventListener('click', searchRoom);
+    document.getElementById('manualRoomSearch').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            searchRoom();
+        }
+    });
 });
 
 // Inicializar escáner QR con html5-qrcode
@@ -56,14 +60,12 @@ async function initQRScanner() {
 }
 
 // Callback cuando se escanea exitosamente
-function onScanSuccess(decodedText, decodedResult) {
+async function onScanSuccess(decodedText, decodedResult) {
     // Detener escáner
     qrScanner.stop();
 
     try {
         // Parsear datos del QR (formato: JSON con id, number, hotel, building, timestamp)
-        // Nota: El backend NO genera QRs actualmente, esta es funcionalidad solo frontend
-        // según README.md. En producción, recepción genera y mucama escanea.
         const roomData = JSON.parse(decodedText);
         
         // Validar estructura
@@ -78,26 +80,17 @@ function onScanSuccess(decodedText, decodedResult) {
         
         if (daysDiff > 30) {
             showError('Este código QR ha caducado (>30 días)');
+            restartScanner();
             return;
         }
 
-        scannedRoomData = roomData;
-        showRoomResult(roomData);
+        // Acceder a la habitación
+        await accessRoom(roomData.id);
 
     } catch (error) {
         console.error('Error parsing QR:', error);
         showError('Código QR inválido o formato incorrecto');
-        
-        // Reiniciar escáner después de error
-        setTimeout(() => {
-            document.getElementById('qr-error').classList.add('d-none');
-            qrScanner.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: { width: 250, height: 250 } },
-                onScanSuccess,
-                onScanError
-            );
-        }, 3000);
+        restartScanner();
     }
 }
 
@@ -105,63 +98,102 @@ function onScanError(error) {
     // No hacer nada, errores de escaneo son normales
 }
 
-// Mostrar resultado del QR escaneado
-function showRoomResult(roomData) {
-    document.getElementById('qr-result').classList.remove('d-none');
-    document.getElementById('qr-room-info').innerHTML = `
-        <strong>Habitación:</strong> ${roomData.number}<br>
-        <strong>Edificio:</strong> ${roomData.building || 'N/A'}<br>
-        <strong>Hotel:</strong> ${roomData.hotel || 'N/A'}
-    `;
-}
-
-// Asignar habitación al usuario actual (con offline queue)
-// Backend: RoomController.updateRoom() - PUT /api/rooms/{id}
-async function assignRoom() {
+// Acceder a una habitación (por QR o búsqueda manual)
+async function accessRoom(roomId) {
     try {
-        const btn = document.getElementById('assignRoomBtn');
-        btn.disabled = true;
-        btn.textContent = 'Asignando...';
-
-        const userData = api.getUserData();
-        
         if (!navigator.onLine) {
-            // Guardar en queue para sync posterior
-            await dbService.addToSyncQueue({
-                type: 'ASSIGN_ROOM',
-                roomId: scannedRoomData.id,
-                userId: userData.userId,
-                timestamp: new Date().toISOString()
-            });
-            showSuccess('📴 Asignación guardada. Se sincronizará cuando haya conexión');
-            setTimeout(() => window.location.href = 'index.html', 2000);
+            showError('📴 Sin conexión. Necesitas internet para acceder a habitaciones.');
+            restartScanner();
             return;
         }
-        
-        // Obtener habitación actual del backend para preservar otros datos
-        const room = await api.get(ENDPOINTS.ROOM_BY_ID(scannedRoomData.id));
-        
-        // Actualizar con la asignación
-        room.assignedTo = { id: userData.userId };
-        room.assignedAt = new Date().toISOString();
-        
-        await api.put(ENDPOINTS.ROOM_BY_ID(scannedRoomData.id), room);
 
-        showSuccess('¡Habitación asignada correctamente!');
+        showSuccess('🔍 Buscando habitación...');
+
+        // Obtener datos completos de la habitación del backend
+        const room = await api.get(ENDPOINTS.ROOM_BY_ID(roomId));
         
-        // Redirigir al inicio después de 2 segundos
+        if (!room) {
+            showError('Habitación no encontrada');
+            restartScanner();
+            return;
+        }
+
+        const userData = api.getUserData();
+        const isAssigned = room.assignedTo && room.assignedTo.id === userData.userId;
+
+        // Guardar datos COMPLETOS de la habitación en sessionStorage
+        sessionStorage.setItem('pendingRoomOpen', JSON.stringify({
+            roomId: room.id,
+            roomNumber: room.number,
+            roomData: room, // Guardar objeto completo para evitar otra llamada API
+            isAssigned: isAssigned,
+            scannedFromQR: true
+        }));
+
+        // Redirigir al dashboard donde se abrirá el modal automáticamente
+        showSuccess(`✅ Accediendo a habitación ${room.number}...`);
         setTimeout(() => {
             window.location.href = 'index.html';
-        }, 2000);
+        }, 800);
 
     } catch (error) {
-        console.error('Error assigning room:', error);
-        showError('Error al asignar habitación');
-        
-        const btn = document.getElementById('assignRoomBtn');
-        btn.disabled = false;
-        btn.textContent = 'Auto-asignarme esta Habitación';
+        console.error('Error accessing room:', error);
+        showError('Error al acceder a la habitación');
+        restartScanner();
     }
+}
+
+// Búsqueda manual de habitación por número
+async function searchRoom() {
+    const input = document.getElementById('manualRoomSearch');
+    const roomNumber = input.value.trim();
+
+    if (!roomNumber) {
+        showError('Por favor ingresa un número de habitación');
+        return;
+    }
+
+    try {
+        const btn = document.getElementById('searchRoomBtn');
+        btn.disabled = true;
+        btn.textContent = 'Buscando...';
+
+        // Obtener todas las habitaciones y buscar por número
+        const rooms = await api.get(ENDPOINTS.ROOMS);
+        const room = rooms.find(r => r.number === roomNumber);
+
+        if (!room) {
+            showError(`Habitación ${roomNumber} no encontrada`);
+            btn.disabled = false;
+            btn.textContent = 'Buscar';
+            return;
+        }
+
+        // Acceder a la habitación encontrada
+        await accessRoom(room.id);
+
+    } catch (error) {
+        console.error('Error searching room:', error);
+        showError('Error al buscar habitación');
+        const btn = document.getElementById('searchRoomBtn');
+        btn.disabled = false;
+        btn.textContent = 'Buscar';
+    }
+}
+
+// Reiniciar escáner después de error
+function restartScanner() {
+    setTimeout(() => {
+        document.getElementById('qr-error').classList.add('d-none');
+        if (qrScanner) {
+            qrScanner.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                onScanSuccess,
+                onScanError
+            );
+        }
+    }, 3000);
 }
 
 function showError(message) {

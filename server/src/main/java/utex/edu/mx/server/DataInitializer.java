@@ -68,16 +68,6 @@ public class DataInitializer implements CommandLineRunner {
         admin.setActive(true);
         userRepository.save(admin);
         
-        User reception = new User();
-        reception.setUsername("recepcion1");
-        reception.setPassword(passwordEncoder.encode("password"));
-        reception.setName("María Recepción");
-        reception.setEmail("recepcion@hotel.com");
-        reception.setRole(User.Role.RECEPTION);
-        reception.setHotel(hotel);
-        reception.setActive(true);
-        userRepository.save(reception);
-        
         User maid1 = new User();
         maid1.setUsername("mucama1");
         maid1.setPassword(passwordEncoder.encode("password"));
@@ -88,19 +78,8 @@ public class DataInitializer implements CommandLineRunner {
         maid1.setActive(true);
         userRepository.save(maid1);
         
-        User maid2 = new User();
-        maid2.setUsername("mucama2");
-        maid2.setPassword(passwordEncoder.encode("password"));
-        maid2.setName("Carmen López");
-        maid2.setEmail("carmen@hotel.com");
-        maid2.setRole(User.Role.MAID);
-        maid2.setHotel(hotel);
-        maid2.setActive(true);
-        userRepository.save(maid2);
-        
         System.out.println("✅ Initial data loaded successfully!");
         System.out.println("👤 Admin user: admin / password");
-        System.out.println("👤 Reception user: recepcion1 / password");
-        System.out.println("👤 Maid users: mucama1 / password, mucama2 / password");
+        System.out.println("👤 Maid user: mucama1 / password");
     }
 }

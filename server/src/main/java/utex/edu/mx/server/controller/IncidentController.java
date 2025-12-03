@@ -6,7 +6,11 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 import utex.edu.mx.server.dto.WebSocketNotification;
 import utex.edu.mx.server.model.Incident;
+import utex.edu.mx.server.model.Room;
+import utex.edu.mx.server.model.User;
 import utex.edu.mx.server.repository.IncidentRepository;
+import utex.edu.mx.server.repository.RoomRepository;
+import utex.edu.mx.server.repository.UserRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -18,6 +22,8 @@ import java.util.List;
 public class IncidentController {
     
     private final IncidentRepository incidentRepository;
+    private final RoomRepository roomRepository;
+    private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
     
     @GetMapping
@@ -49,6 +55,20 @@ public class IncidentController {
     
     @PostMapping
     public ResponseEntity<Incident> createIncident(@RequestBody Incident incident) {
+        // Fetch and set the Room entity
+        if (incident.getRoom() != null && incident.getRoom().getId() != null) {
+            Room room = roomRepository.findById(incident.getRoom().getId())
+                .orElseThrow(() -> new RuntimeException("Room not found with id: " + incident.getRoom().getId()));
+            incident.setRoom(room);
+        }
+        
+        // Fetch and set the User entity
+        if (incident.getReportedBy() != null && incident.getReportedBy().getId() != null) {
+            User user = userRepository.findById(incident.getReportedBy().getId())
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + incident.getReportedBy().getId()));
+            incident.setReportedBy(user);
+        }
+        
         incident.setCreatedAt(LocalDateTime.now());
         incident.setUpdatedAt(LocalDateTime.now());
         Incident savedIncident = incidentRepository.save(incident);
@@ -70,7 +90,6 @@ public class IncidentController {
         return incidentRepository.findById(id)
                 .map(incident -> {
                     incident.setDescription(incidentDetails.getDescription());
-                    incident.setSeverity(incidentDetails.getSeverity());
                     incident.setStatus(incidentDetails.getStatus());
                     incident.setResolutionNotes(incidentDetails.getResolutionNotes());
                     incident.setResolvedAt(incidentDetails.getResolvedAt());

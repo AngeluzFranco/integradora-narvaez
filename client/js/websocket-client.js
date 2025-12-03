@@ -23,30 +23,37 @@ class WebSocketClient {
             return;
         }
 
-        const wsUrl = API_URL.replace('http', 'ws') + '/ws';
-        const socket = new SockJS(wsUrl);
-        this.stompClient = Stomp.over(socket);
+        try {
+            // SockJS maneja la conexión HTTP, no necesitamos convertir a ws://
+            const wsUrl = API_URL + '/ws';
+            const socket = new SockJS(wsUrl);
+            this.stompClient = Stomp.over(socket);
 
-        // Deshabilitar logs de debug en producción
-        this.stompClient.debug = (msg) => {
-            if (import.meta.env?.DEV) console.log(msg);
-        };
+            // Deshabilitar logs de debug en producción
+            this.stompClient.debug = (msg) => {
+                if (import.meta.env?.DEV) console.log(msg);
+            };
 
-        this.stompClient.connect(
-            {},
-            (frame) => {
-                console.log('✅ WebSocket connected:', frame);
-                this.connected = true;
-                this.reconnectAttempts = 0;
-                
-                if (onConnected) onConnected();
-            },
-            (error) => {
-                console.error('❌ WebSocket connection error:', error);
-                this.connected = false;
-                this.attemptReconnect();
-            }
-        );
+            this.stompClient.connect(
+                {},
+                (frame) => {
+                    console.log('✅ WebSocket connected:', frame);
+                    this.connected = true;
+                    this.reconnectAttempts = 0;
+                    
+                    if (onConnected) onConnected();
+                },
+                (error) => {
+                    console.warn('⚠️ WebSocket connection error (backend may be offline):', error);
+                    this.connected = false;
+                    // No intentar reconectar si el backend no está disponible
+                    // this.attemptReconnect();
+                }
+            );
+        } catch (error) {
+            console.warn('⚠️ Error initializing WebSocket:', error);
+            this.connected = false;
+        }
     }
 
     // Intentar reconexión automática

@@ -33,10 +33,6 @@ public class Incident {
     
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Severity severity = Severity.MEDIUM;
-    
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private IncidentStatus status = IncidentStatus.OPEN;
     
     @Column(name = "photos", columnDefinition = "TEXT")
@@ -53,10 +49,6 @@ public class Incident {
     
     @Column(name = "updated_at")
     private LocalDateTime updatedAt = LocalDateTime.now();
-    
-    public enum Severity {
-        LOW, MEDIUM, HIGH
-    }
     
     public enum IncidentStatus {
         OPEN, RESOLVED

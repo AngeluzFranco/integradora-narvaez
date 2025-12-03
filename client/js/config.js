@@ -19,6 +19,8 @@ export const ENDPOINTS = {
     ROOMS_BY_STATUS: (status) => `${API_URL}/rooms/status/${status}`,
     ROOMS_BY_MAID: (maidId) => `${API_URL}/rooms/maid/${maidId}`,  // Habitaciones asignadas a mucama
     ROOM_STATUS: (id) => `${API_URL}/rooms/${id}/status`,       // PATCH - Actualizar estado
+    ROOM_ASSIGN: (id) => `${API_URL}/rooms/${id}/assign`,       // PATCH - Reasignar habitación
+    ROOMS_RESET: `${API_URL}/rooms/reset`,                      // POST - Reinicio manual diario
     
     // IncidentController.java - /api/incidents
     INCIDENTS: `${API_URL}/incidents`,        // GET/POST - Todas las incidencias

@@ -55,25 +55,17 @@
         <div class="card mb-3">
             <div class="card-body">
                 <div class="row g-3">
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <select class="form-select" id="filterStatus">
                             <option value="">Todos los estados</option>
                             <option value="OPEN" selected>Abiertas</option>
                             <option value="RESOLVED">Resueltas</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
-                        <select class="form-select" id="filterSeverity">
-                            <option value="">Todas las severidades</option>
-                            <option value="HIGH">Alta</option>
-                            <option value="MEDIUM">Media</option>
-                            <option value="LOW">Baja</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <input type="text" class="form-control" id="searchIncident" placeholder="Buscar...">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <button class="btn btn-outline-primary w-100" id="clearFilters">Limpiar</button>
                     </div>
                 </div>
@@ -90,7 +82,6 @@
                                 <th>ID</th>
                                 <th>Habitación</th>
                                 <th>Descripción</th>
-                                <th>Severidad</th>
                                 <th>Reportado por</th>
                                 <th>Estado</th>
                                 <th>Fecha</th>
@@ -98,7 +89,7 @@
                             </tr>
                         </thead>
                         <tbody id="incidentsTableBody">
-                            <tr><td colspan="8" class="text-center">Cargando...</td></tr>
+                            <tr><td colspan="7" class="text-center">Cargando...</td></tr>
                         </tbody>
                     </table>
                 </div>
