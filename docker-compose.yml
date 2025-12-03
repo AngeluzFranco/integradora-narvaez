@@ -9,7 +9,7 @@ services:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: hoteldb
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - hotel-db-volume:/var/lib/mysql
     networks:
