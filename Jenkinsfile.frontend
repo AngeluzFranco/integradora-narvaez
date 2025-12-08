@@ -15,10 +15,10 @@ pipeline {
             steps {
                 script {
                     echo "🔍 Verificando conexión con EC2 Frontend..."
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY', passphraseVariable: '', usernameVariable: 'SSH_USER')]) {
                         bat """
                             set PATH=C:\\Program Files\\Git\\usr\\bin;%PATH%
-                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "echo Conexion exitosa && docker --version"
+                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL ubuntu@${EC2_HOST} "echo Conexion exitosa && docker --version"
                         """
                     }
                 }
@@ -29,10 +29,10 @@ pipeline {
             steps {
                 script {
                     echo "📥 Clonando o actualizando repositorio en EC2..."
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY', passphraseVariable: '', usernameVariable: 'SSH_USER')]) {
                         bat """
                             set PATH=C:\\Program Files\\Git\\usr\\bin;%PATH%
-                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "mkdir -p ${APP_DIR} && cd ${APP_DIR} && if [ -d .git ]; then git fetch origin && git reset --hard origin/${BRANCH}; else cd .. && rm -rf hotel-app && git clone ${REPO_URL} hotel-app && cd hotel-app && git checkout ${BRANCH}; fi"
+                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL ubuntu@${EC2_HOST} "mkdir -p ${APP_DIR} && cd ${APP_DIR} && if [ -d .git ]; then git fetch origin && git reset --hard origin/${BRANCH}; else cd .. && rm -rf hotel-app && git clone ${REPO_URL} hotel-app && cd hotel-app && git checkout ${BRANCH}; fi"
                         """
                     }
                 }
@@ -43,10 +43,10 @@ pipeline {
             steps {
                 script {
                     echo "⚙️ Actualizando config.js con IP del backend..."
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY', passphraseVariable: '', usernameVariable: 'SSH_USER')]) {
                         bat """
                             set PATH=C:\\Program Files\\Git\\usr\\bin;%PATH%
-                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "cd ${APP_DIR}/client/js && sed -i 's|API_URL:.*|API_URL: \\\"http://${EC2_BACKEND_HOST}:8081\\\",|' config.js && sed -i 's|WS_URL:.*|WS_URL: \\\"ws://${EC2_BACKEND_HOST}:8081/ws\\\"|' config.js"
+                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL ubuntu@${EC2_HOST} "cd ${APP_DIR}/client/js && sed -i 's|API_URL:.*|API_URL: \"http://${EC2_BACKEND_HOST}:8081\",|' config.js && sed -i 's|WS_URL:.*|WS_URL: \"ws://${EC2_BACKEND_HOST}:8081/ws\"|' config.js"
                         """
                     }
                 }
@@ -57,10 +57,10 @@ pipeline {
             steps {
                 script {
                     echo "🛑 Deteniendo servicios anteriores..."
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY', passphraseVariable: '', usernameVariable: 'SSH_USER')]) {
                         bat """
                             set PATH=C:\\Program Files\\Git\\usr\\bin;%PATH%
-                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "cd ${APP_DIR} && docker-compose -f docker-compose.frontend.yml down || true"
+                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL ubuntu@${EC2_HOST} "cd ${APP_DIR} && docker-compose -f docker-compose.frontend.yml down || true"
                         """
                     }
                 }
@@ -71,10 +71,10 @@ pipeline {
             steps {
                 script {
                     echo "🧹 Limpiando imágenes antiguas..."
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY', passphraseVariable: '', usernameVariable: 'SSH_USER')]) {
                         bat """
                             set PATH=C:\\Program Files\\Git\\usr\\bin;%PATH%
-                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "docker system prune -f"
+                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL ubuntu@${EC2_HOST} "docker system prune -f"
                         """
                     }
                 }
@@ -85,10 +85,10 @@ pipeline {
             steps {
                 script {
                     echo "🏗️ Construyendo y desplegando frontend..."
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY', passphraseVariable: '', usernameVariable: 'SSH_USER')]) {
                         bat """
                             set PATH=C:\\Program Files\\Git\\usr\\bin;%PATH%
-                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "cd ${APP_DIR} && docker-compose -f docker-compose.frontend.yml up --build -d && sleep 5"
+                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL ubuntu@${EC2_HOST} "cd ${APP_DIR} && docker-compose -f docker-compose.frontend.yml up --build -d && sleep 5"
                         """
                     }
                 }
@@ -99,10 +99,10 @@ pipeline {
             steps {
                 script {
                     echo "🏥 Verificando despliegue del frontend..."
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY', passphraseVariable: '', usernameVariable: 'SSH_USER')]) {
                         bat """
                             set PATH=C:\\Program Files\\Git\\usr\\bin;%PATH%
-                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "docker logs hotel-frontend --tail 20 && docker ps"
+                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL ubuntu@${EC2_HOST} "docker logs hotel-frontend --tail 20 && docker ps"
                         """
                     }
                 }
