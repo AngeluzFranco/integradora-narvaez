@@ -2,13 +2,13 @@ pipeline {
     agent any
     
     environment {
-        // Variables configuradas en Jenkins (Global properties)
         EC2_HOST = "${env.EC2_FRONTEND_HOST}"
         EC2_BACKEND_HOST = "${env.EC2_BACKEND_HOST}"
-        EC2_USER = "${env.EC2_USER}"
+        EC2_USER = "ubuntu"
         APP_DIR = "/home/ubuntu/hotel-app"
         REPO_URL = "https://github.com/AngeluzFranco/integradora-narvaez.git"
         BRANCH = "main"
+        GIT_BASH = "C:\\Program Files\\Git\\bin\\bash.exe"
     }
     
     stages {
@@ -16,103 +16,48 @@ pipeline {
             steps {
                 script {
                     echo "🔍 Verificando conexión con EC2 Frontend..."
-                    sshagent(['ec2-frontend-ssh']) {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
-                                echo "✅ Conexión SSH exitosa"
-                                echo "Host: \$(hostname)"
-                                echo "User: \$(whoami)"
-                                echo "Docker version: \$(docker --version)"
-                            '
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                        bat """
+                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'echo Conexion SSH exitosa && hostname && whoami && docker --version'"
                         """
                     }
                 }
             }
         }
         
-        stage('Clonar/Actualizar Repositorio en EC2') {
+        stage('Clonar/Actualizar Repositorio') {
             steps {
                 script {
                     echo "📥 Clonando o actualizando repositorio en EC2..."
-                    sshagent(['ec2-frontend-ssh']) {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
-                                # Crear directorio si no existe
-                                mkdir -p ${APP_DIR}
-                                cd ${APP_DIR}
-                                
-                                # Si existe .git, hacer pull, si no, clonar
-                                if [ -d ".git" ]; then
-                                    echo "📦 Repositorio existe, actualizando..."
-                                    git fetch origin
-                                    git reset --hard origin/${BRANCH}
-                                    git clean -fd
-                                else
-                                    echo "📦 Clonando repositorio..."
-                                    cd ..
-                                    rm -rf hotel-app
-                                    git clone ${REPO_URL} hotel-app
-                                    cd hotel-app
-                                    git checkout ${BRANCH}
-                                fi
-                                
-                                echo "✅ Código actualizado"
-                                git log -1 --oneline
-                            '
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                        bat """
+                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'mkdir -p ${APP_DIR} && cd ${APP_DIR} && if [ -d .git ]; then echo Actualizando repo... && git fetch origin && git reset --hard origin/${BRANCH} && git clean -fd; else echo Clonando repo... && cd .. && rm -rf hotel-app && git clone ${REPO_URL} hotel-app && cd hotel-app && git checkout ${BRANCH}; fi && echo Codigo actualizado && git log -1 --oneline'"
                         """
                     }
                 }
             }
         }
         
-        stage('Configurar API URL del Backend') {
+        stage('Actualizar config.js con IP Backend') {
             steps {
                 script {
-                    echo "⚙️  Configurando URL del backend..."
-                    sshagent(['ec2-frontend-ssh']) {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
-                                cd ${APP_DIR}/client/js
-                                
-                                # Backup del config original
-                                cp config.js config.js.backup || true
-                                
-                                # Actualizar config.js con la IP del backend
-                                cat > config.js << EOF
-const CONFIG = {
-    API_URL: "http://${EC2_BACKEND_HOST}:8081",
-    WS_URL: "ws://${EC2_BACKEND_HOST}:8081/ws"
-};
-
-if (typeof module !== "undefined" && module.exports) {
-    module.exports = CONFIG;
-}
-EOF
-                                
-                                echo "✅ config.js actualizado:"
-                                cat config.js
-                            '
+                    echo "⚙️ Actualizando config.js con IP del backend..."
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                        bat """
+                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'cd ${APP_DIR}/client/js && sed -i \"s|API_URL: .*|API_URL: \\\"http://${EC2_BACKEND_HOST}:8081\\\",|\" config.js && sed -i \"s|WS_URL: .*|WS_URL: \\\"ws://${EC2_BACKEND_HOST}:8081/ws\\\"|\" config.js && echo Config actualizado: && cat config.js | grep -E \"API_URL|WS_URL\"'"
                         """
                     }
                 }
             }
         }
         
-        stage('Detener Servicio Anterior') {
+        stage('Detener Contenedor Anterior') {
             steps {
                 script {
-                    echo "🛑 Deteniendo servicio anterior..."
-                    sshagent(['ec2-frontend-ssh']) {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
-                                cd ${APP_DIR}
-                                
-                                # Detener contenedor del frontend si existe
-                                docker stop hotel-frontend || true
-                                docker rm hotel-frontend || true
-                                
-                                echo "✅ Servicio detenido"
-                            '
+                    echo "🛑 Deteniendo contenedor anterior..."
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                        bat """
+                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'docker stop hotel-frontend 2>/dev/null || echo No hay contenedor corriendo && docker rm hotel-frontend 2>/dev/null || echo No hay contenedor que eliminar'"
                         """
                     }
                 }
@@ -122,105 +67,49 @@ EOF
         stage('Limpiar Imágenes Antiguas') {
             steps {
                 script {
-                    echo "🧹 Limpiando imágenes antiguas del frontend..."
-                    sshagent(['ec2-frontend-ssh']) {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
-                                # Eliminar imagen del frontend
-                                docker rmi integradora-frontend || true
-                                
-                                # Limpiar recursos no utilizados
-                                docker system prune -f
-                                
-                                echo "✅ Limpieza completada"
-                            '
+                    echo "🧹 Limpiando imágenes antiguas..."
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                        bat """
+                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'docker system prune -f && echo Limpieza completada'"
                         """
                     }
                 }
             }
         }
         
-        stage('Construir Imagen del Frontend') {
+        stage('Construir Imagen Docker') {
             steps {
                 script {
-                    echo "🏗️  Construyendo imagen del frontend..."
-                    sshagent(['ec2-frontend-ssh']) {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
-                                cd ${APP_DIR}/client
-                                
-                                # Construir imagen
-                                echo "🔨 Iniciando docker build..."
-                                docker build -t integradora-frontend .
-                                
-                                echo "✅ Imagen construida"
-                                docker images integradora-frontend
-                            '
+                    echo "🏗️ Construyendo imagen Docker del frontend..."
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                        bat """
+                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'cd ${APP_DIR}/client && docker build -t hotel-frontend:latest . && echo Imagen construida exitosamente'"
                         """
                     }
                 }
             }
         }
         
-        stage('Desplegar Frontend') {
+        stage('Desplegar Contenedor') {
             steps {
                 script {
-                    echo "🚀 Desplegando frontend..."
-                    sshagent(['ec2-frontend-ssh']) {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
-                                # Ejecutar contenedor
-                                docker run -d \\
-                                    --name hotel-frontend \\
-                                    --restart unless-stopped \\
-                                    -p 80:80 \\
-                                    integradora-frontend
-                                
-                                echo "⏳ Esperando a que el servicio esté listo..."
-                                sleep 5
-                                
-                                # Verificar que el contenedor está corriendo
-                                echo "📊 Estado del contenedor:"
-                                docker ps --filter name=hotel-frontend
-                                
-                                # Verificar logs
-                                echo "📝 Logs iniciales:"
-                                docker logs hotel-frontend --tail 20
-                                
-                                echo "✅ Frontend desplegado"
-                            '
+                    echo "🚀 Desplegando contenedor del frontend..."
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                        bat """
+                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'docker run -d --name hotel-frontend -p 80:80 --restart unless-stopped hotel-frontend:latest && sleep 5 && echo Frontend desplegado'"
                         """
                     }
                 }
             }
         }
         
-        stage('Verificar Disponibilidad') {
+        stage('Verificar Despliegue') {
             steps {
                 script {
-                    echo "🏥 Verificando disponibilidad del frontend..."
-                    sshagent(['ec2-frontend-ssh']) {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
-                                # Verificar que nginx está respondiendo
-                                echo "⏳ Esperando respuesta del servidor..."
-                                for i in {1..15}; do
-                                    if curl -s http://localhost:80 > /dev/null 2>&1; then
-                                        echo "✅ Frontend está respondiendo"
-                                        break
-                                    fi
-                                    echo "Intento \$i/15..."
-                                    sleep 2
-                                done
-                                
-                                # Mostrar info del contenedor
-                                echo "🐳 Info del contenedor:"
-                                docker inspect hotel-frontend --format "{{.State.Status}}"
-                                
-                                # Verificar archivos servidos
-                                echo "📁 Archivos en nginx:"
-                                docker exec hotel-frontend ls -la /usr/share/nginx/html/ | head -20
-                            '
+                    echo "🏥 Verificando despliegue del frontend..."
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
+                        bat """
+                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'echo Verificando frontend... && for i in {1..20}; do if curl -s -o /dev/null -w \"%{http_code}\" http://localhost/ | grep -q 200; then echo Frontend respondiendo; break; fi; echo Intento \\$i/20...; sleep 2; done && echo Contenedores: && docker ps --format \"table {{.Names}}\\t{{.Status}}\\t{{.Ports}}\"'"
                         """
                     }
                 }
@@ -230,52 +119,10 @@ EOF
     
     post {
         success {
-            echo '''
-            ✅ ========================================
-            ✅ DESPLIEGUE EXITOSO EN EC2 FRONTEND
-            ✅ ========================================
-            
-            🌐 Frontend disponible en:
-               http://''' + "${EC2_HOST}" + '''
-            
-            🔗 URLs importantes:
-               Login: http://''' + "${EC2_HOST}" + '''/index.html
-               Mucama: http://''' + "${EC2_HOST}" + '''/mucama/
-               Recepción: http://''' + "${EC2_HOST}" + '''/recepcion/
-            
-            ⚙️  Backend configurado:
-               API: http://''' + "${EC2_BACKEND_HOST}" + ''':8081
-            
-            📊 Verificar estado:
-               ssh ubuntu@''' + "${EC2_HOST}" + ''' "docker ps"
-            '''
+            echo "✅ DESPLIEGUE EXITOSO - Frontend disponible en: http://${EC2_HOST}"
         }
-        
         failure {
-            echo '''
-            ❌ ========================================
-            ❌ ERROR EN EL DESPLIEGUE
-            ❌ ========================================
-            
-            🔍 Para diagnosticar, ejecuta:
-            
-            1. Conectar a EC2:
-               ssh -i ~/.ssh/hotel-app-key.pem ubuntu@''' + "${EC2_HOST}" + '''
-            
-            2. Ver logs:
-               docker logs hotel-frontend
-            
-            3. Verificar contenedor:
-               docker ps -a
-               docker inspect hotel-frontend
-            
-            4. Probar nginx:
-               docker exec hotel-frontend nginx -t
-            '''
-        }
-        
-        always {
-            echo '🏁 Pipeline finalizado'
+            echo "❌ ERROR EN EL DESPLIEGUE - Revisa los logs en EC2"
         }
     }
 }
