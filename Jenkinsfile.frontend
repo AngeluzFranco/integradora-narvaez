@@ -51,13 +51,13 @@ pipeline {
             }
         }
         
-        stage('Detener Contenedor Anterior') {
+        stage('Detener Servicios Anteriores') {
             steps {
                 script {
-                    echo "🛑 Deteniendo contenedor anterior..."
+                    echo "🛑 Deteniendo servicios anteriores..."
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
                         bat """
-                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'docker stop hotel-frontend 2>/dev/null || echo No hay contenedor corriendo && docker rm hotel-frontend 2>/dev/null || echo No hay contenedor que eliminar'"
+                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'cd ${APP_DIR} && if [ -f docker-compose.frontend.yml ]; then docker-compose -f docker-compose.frontend.yml down || true && echo Servicios detenidos; else echo No se encontro docker-compose.frontend.yml; fi'"
                         """
                     }
                 }
@@ -77,26 +77,13 @@ pipeline {
             }
         }
         
-        stage('Construir Imagen Docker') {
+        stage('Construir y Desplegar') {
             steps {
                 script {
-                    echo "🏗️ Construyendo imagen Docker del frontend..."
+                    echo "🏗️ Construyendo y desplegando frontend..."
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
                         bat """
-                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'cd ${APP_DIR}/client && docker build -t hotel-frontend:latest . && echo Imagen construida exitosamente'"
-                        """
-                    }
-                }
-            }
-        }
-        
-        stage('Desplegar Contenedor') {
-            steps {
-                script {
-                    echo "🚀 Desplegando contenedor del frontend..."
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
-                        bat """
-                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'docker run -d --name hotel-frontend -p 80:80 --restart unless-stopped hotel-frontend:latest && sleep 5 && echo Frontend desplegado'"
+                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'cd ${APP_DIR} && echo Iniciando docker-compose build... && docker-compose -f docker-compose.frontend.yml up --build -d && sleep 5 && echo Frontend desplegado'"
                         """
                     }
                 }
@@ -109,7 +96,7 @@ pipeline {
                     echo "🏥 Verificando despliegue del frontend..."
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
                         bat """
-                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'echo Verificando frontend... && for i in {1..20}; do if curl -s -o /dev/null -w \"%{http_code}\" http://localhost/ | grep -q 200; then echo Frontend respondiendo; break; fi; echo Intento \\$i/20...; sleep 2; done && echo Contenedores: && docker ps --format \"table {{.Names}}\\t{{.Status}}\\t{{.Ports}}\"'"
+                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'echo Verificando frontend... && for i in {1..20}; do if curl -s -o /dev/null -w \"%{http_code}\" http://localhost/ | grep -q 200; then echo Frontend respondiendo; break; fi; echo Intento \\$i/20...; sleep 2; done && echo Estado contenedores: && docker-compose -f ${APP_DIR}/docker-compose.frontend.yml ps'"
                         """
                     }
                 }

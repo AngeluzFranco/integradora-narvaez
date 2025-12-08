@@ -43,7 +43,7 @@ pipeline {
                     echo "🛑 Deteniendo servicios anteriores..."
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-backend-ssh', keyFileVariable: 'SSH_KEY')]) {
                         bat """
-                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'cd ${APP_DIR} && if [ -f docker-compose.yml ]; then docker-compose down || true && echo Servicios detenidos; else echo No se encontro docker-compose.yml; fi'"
+                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'cd ${APP_DIR} && if [ -f docker-compose.backend.yml ]; then docker-compose -f docker-compose.backend.yml down || true && echo Servicios detenidos; else echo No se encontro docker-compose.backend.yml; fi'"
                         """
                     }
                 }
@@ -69,7 +69,7 @@ pipeline {
                     echo "🏗️ Construyendo y desplegando servicios..."
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-backend-ssh', keyFileVariable: 'SSH_KEY')]) {
                         bat """
-                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'cd ${APP_DIR} && echo Iniciando docker-compose build... && docker-compose up --build -d && sleep 10 && echo Estado de contenedores: && docker-compose ps && echo Logs del backend: && docker logs hotel-backend --tail 50'"
+                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'cd ${APP_DIR} && echo Iniciando docker-compose build... && docker-compose -f docker-compose.backend.yml up --build -d && sleep 10 && echo Estado de contenedores: && docker-compose -f docker-compose.backend.yml ps && echo Logs del backend: && docker logs hotel-backend --tail 50'"
                         """
                     }
                 }
