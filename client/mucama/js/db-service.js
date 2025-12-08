@@ -38,6 +38,15 @@ class DatabaseService {
             // Configurar listeners de conectividad
             window.addEventListener('online', () => this.handleOnline());
             window.addEventListener('offline', () => this.handleOffline());
+            
+            // Escuchar mensajes del Service Worker
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                console.log('📬 [DB] Mensaje recibido del SW:', event.data);
+                
+                if (event.data.type === 'SYNC_INCIDENT') {
+                    this.processSyncQueue();
+                }
+            });
 
             // Sincronizar si hay conexión
             if (this.isOnline) {
@@ -236,6 +245,19 @@ class DatabaseService {
             });
 
             this.pendingChanges.push(item);
+            
+            // Registrar tarea de background sync con el Service Worker
+            if ('serviceWorker' in navigator) {
+                try {
+                    const registration = await navigator.serviceWorker.ready;
+                    if ('sync' in registration) {
+                        await registration.sync.register('sync-pending-changes');
+                        console.log('✅ Background sync registrado con el SW');
+                    }
+                } catch (error) {
+                    console.warn('⚠️ No se pudo registrar background sync:', error);
+                }
+            }
 
             // Intentar sincronizar si hay conexión
             if (navigator.onLine && !this.syncInProgress) {
@@ -427,6 +449,17 @@ class DatabaseService {
         console.log('✅ Conexión restaurada');
         this.isOnline = true;
         this.showConnectivityToast('Conexión restaurada. Sincronizando...', 'success');
+        
+        // Notificar al Service Worker que la red está disponible
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            console.log('📡 [DB] Notificando al SW que la red está disponible');
+            navigator.serviceWorker.controller.postMessage({
+                type: 'NETWORK_ONLINE'
+            });
+        }
+        
+        // Procesar cola de sincronización
+        this.processSyncQueue();
         this.syncAll();
     }
 

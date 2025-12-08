@@ -262,13 +262,58 @@ self.addEventListener('sync', (event) => {
 });
 
 async function syncPendingChanges() {
-    // Esta función se conectaría con db-service para sincronizar
-    // cambios pendientes guardados en PouchDB
-    console.log('[SW] Syncing pending changes...');
+    console.log('🔄 [SW] Iniciando sincronización de cambios pendientes...');
     
-    // TODO: Integrar con PouchDB sync queue
-    // const dbService = await import('./mucama/js/db-service.js');
-    // await dbService.processSyncQueue();
+    try {
+        // Importar PouchDB
+        await importScripts('https://cdn.jsdelivr.net/npm/pouchdb@8.0.1/dist/pouchdb.min.js');
+        
+        // Abrir la base de datos de sincronización
+        const syncDB = new PouchDB('hotel_sync_queue');
+        
+        // Obtener todos los items pendientes
+        const result = await syncDB.allDocs({ include_docs: true });
+        const pendingItems = result.rows.filter(row => !row.doc.synced);
+        
+        console.log(`📋 [SW] ${pendingItems.length} items pendientes en la cola`);
+        
+        if (pendingItems.length === 0) {
+            return;
+        }
+        
+        // Obtener configuración del backend
+        const backendUrl = 'https://nonemotive-suggestively-josphine.ngrok-free.dev';
+        
+        // Procesar cada item
+        for (const item of pendingItems) {
+            const doc = item.doc;
+            
+            try {
+                console.log(`📤 [SW] Sincronizando ${doc.type}:`, doc._id);
+                
+                if (doc.type === 'INCIDENT_CREATE') {
+                    // Obtener el token del localStorage (a través de un cliente)
+                    const clients = await self.clients.matchAll();
+                    if (clients.length === 0) {
+                        console.log('⚠️ [SW] No hay clientes activos, esperando...');
+                        continue;
+                    }
+                    
+                    // Enviar mensaje al cliente para que sincronice
+                    clients[0].postMessage({
+                        type: 'SYNC_INCIDENT',
+                        incidentId: doc.data._id
+                    });
+                }
+                
+            } catch (error) {
+                console.error(`❌ [SW] Error sincronizando item ${doc._id}:`, error);
+            }
+        }
+        
+    } catch (error) {
+        console.error('❌ [SW] Error en syncPendingChanges:', error);
+    }
 }
 
 // MESSAGE: Comunicación con la app principal
@@ -284,6 +329,16 @@ self.addEventListener('message', (event) => {
         event.waitUntil(
             caches.open(CACHE_NAME).then((cache) => cache.addAll(urls))
         );
+    }
+    
+    if (event.data.type === 'CHECK_SYNC_QUEUE') {
+        console.log('📬 [SW] Recibido mensaje para revisar cola de sincronización');
+        event.waitUntil(syncPendingChanges());
+    }
+    
+    if (event.data.type === 'NETWORK_ONLINE') {
+        console.log('🌐 [SW] Red disponible, revisando cola de sincronización');
+        event.waitUntil(syncPendingChanges());
     }
 });
 
