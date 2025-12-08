@@ -231,7 +231,20 @@ class DatabaseService {
     }
 
     async processSyncQueue() {
-        if (!this.syncDB || this.syncInProgress || !this.isOnline) return;
+        if (!this.syncDB) {
+            console.log('⚠️ SyncDB no disponible');
+            return;
+        }
+        
+        if (this.syncInProgress) {
+            console.log('⚠️ Sincronización ya en progreso');
+            return;
+        }
+        
+        if (!this.isOnline) {
+            console.log('⚠️ Sin conexión, sincronización omitida');
+            return;
+        }
 
         this.syncInProgress = true;
         console.log('🔄 Procesando cola de sincronización...');
@@ -244,6 +257,10 @@ class DatabaseService {
                 .sort((a, b) => a.addedAt - b.addedAt);
 
             console.log(`📋 ${pending.length} cambios pendientes de sincronización`);
+            
+            if (pending.length === 0) {
+                console.log('✅ No hay cambios pendientes');
+            }
 
             for (const item of pending) {
                 try {

@@ -28,9 +28,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Connectivity indicator
     updateConnectivityIndicator();
-    window.addEventListener('online', () => {
+    window.addEventListener('online', async () => {
         updateConnectivityIndicator();
-        loadIncidents();
+        showToast('🌐 Conexión restaurada. Sincronizando...', 'info');
+        // Sincronizar cambios pendientes
+        await dbService.processSyncQueue();
+        // Recargar incidencias después de sincronizar
+        await loadIncidents();
+        showToast('✅ Sincronización completada', 'success');
     });
     window.addEventListener('offline', updateConnectivityIndicator);
 
@@ -49,12 +54,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupIncidentForm();
     setupPhotoUpload();
     setupCameraButtons();
+    setupSyncButton();
 
     // Auto-refresh cada 30 segundos (solo online)
     setInterval(() => {
         if (navigator.onLine) loadIncidents();
     }, 30000);
 });
+
+// Setup botón de sincronización manual
+function setupSyncButton() {
+    const syncBtn = document.getElementById('syncBtn');
+    if (syncBtn) {
+        syncBtn.addEventListener('click', async () => {
+            if (!navigator.onLine) {
+                showToast('📴 Sin conexión a internet', 'warning');
+                return;
+            }
+            
+            syncBtn.disabled = true;
+            syncBtn.textContent = '⏳';
+            
+            try {
+                showToast('🔄 Sincronizando...', 'info');
+                await dbService.processSyncQueue();
+                await loadIncidents();
+                showToast('✅ Sincronización completada', 'success');
+            } catch (error) {
+                console.error('Error en sincronización:', error);
+                showToast('❌ Error al sincronizar', 'danger');
+            } finally {
+                syncBtn.disabled = false;
+                syncBtn.textContent = '🔄';
+            }
+        });
+    }
+}
 
 // Cargar habitaciones asignadas para el selector (con offline)
 async function loadMyRooms() {
