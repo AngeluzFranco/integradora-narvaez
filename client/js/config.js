@@ -3,7 +3,7 @@
    ====================================== */
 
 // Backend API URL - Conecta con Spring Boot (SecurityConfig permite CORS desde localhost:5173)
-export const API_URL = 'http://54.175.211.67:8081/api';
+export const API_URL = 'https://nonemotive-suggestively-josphine.ngrok-free.dev/api';
 
 // Endpoints del Backend (Spring Boot Controllers)
 export const ENDPOINTS = {
