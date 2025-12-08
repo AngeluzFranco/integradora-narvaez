@@ -17,7 +17,7 @@ pipeline {
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-backend-ssh', keyFileVariable: 'SSH_KEY')]) {
                         bat """
                             set PATH=C:\\Program Files\\Git\\usr\\bin;%PATH%
-                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@${EC2_HOST} "echo Conexion exitosa && docker --version"
+                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "echo Conexion exitosa && docker --version"
                         """
                     }
                 }
