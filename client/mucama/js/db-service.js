@@ -174,7 +174,10 @@ class DatabaseService {
     }
 
     async createIncidentLocal(incidentData) {
-        if (!this.incidentsDB) return null;
+        if (!this.incidentsDB) {
+            console.error('❌ incidentsDB no disponible');
+            return null;
+        }
 
         try {
             const doc = {
@@ -187,18 +190,22 @@ class DatabaseService {
             };
 
             await this.incidentsDB.put(doc);
+            console.log('💾 Incidencia guardada en IndexedDB:', doc._id);
 
             // Agregar a cola de sincronización
-            await this.addToSyncQueue({
+            const queueItem = {
                 type: 'INCIDENT_CREATE',
                 action: 'POST',
                 endpoint: ENDPOINTS.INCIDENTS,
                 data: incidentData,
                 tempId: doc._id,
                 timestamp: Date.now()
-            });
+            };
+            
+            console.log('📤 Agregando incidencia a cola de sincronización:', queueItem);
+            await this.addToSyncQueue(queueItem);
 
-            console.log('💾 Incidencia creada localmente, pendiente de sincronización');
+            console.log('✅ Incidencia creada localmente, pendiente de sincronización');
             return doc;
         } catch (error) {
             console.error('Error creando incidencia local:', error);
@@ -209,24 +216,36 @@ class DatabaseService {
     // === COLA DE SINCRONIZACIÓN ===
 
     async addToSyncQueue(item) {
-        if (!this.syncDB) return;
+        if (!this.syncDB) {
+            console.error('❌ syncDB no disponible');
+            return;
+        }
 
         try {
-            await this.syncDB.post({
+            const queueDoc = {
                 ...item,
                 addedAt: Date.now(),
                 synced: false
+            };
+            
+            const result = await this.syncDB.post(queueDoc);
+            console.log(`📤 Cambio agregado a cola de sincronización:`, {
+                type: item.type,
+                id: result.id,
+                rev: result.rev
             });
 
             this.pendingChanges.push(item);
-            console.log(`📤 Cambio agregado a cola de sincronización: ${item.type}`);
 
             // Intentar sincronizar si hay conexión
-            if (this.isOnline && !this.syncInProgress) {
+            if (navigator.onLine && !this.syncInProgress) {
+                console.log('🔄 Hay conexión, intentando sincronizar inmediatamente...');
                 await this.processSyncQueue();
+            } else {
+                console.log('📴 Sin conexión o sincronización en progreso, se sincronizará más tarde');
             }
         } catch (error) {
-            console.error('Error agregando a cola:', error);
+            console.error('❌ Error agregando a cola:', error);
         }
     }
 
@@ -241,13 +260,17 @@ class DatabaseService {
             return;
         }
         
-        if (!this.isOnline) {
-            console.log('⚠️ Sin conexión, sincronización omitida');
+        // Verificar conectividad real, no solo la bandera
+        if (!navigator.onLine) {
+            console.log('⚠️ Sin conexión (navigator.onLine=false), sincronización omitida');
             return;
         }
 
         this.syncInProgress = true;
-        console.log('🔄 Procesando cola de sincronización...');
+        console.log('🔄 Procesando cola de sincronización...', {
+            isOnline: this.isOnline,
+            navigatorOnline: navigator.onLine
+        });
 
         try {
             const result = await this.syncDB.allDocs({ include_docs: true });
@@ -264,6 +287,12 @@ class DatabaseService {
 
             for (const item of pending) {
                 try {
+                    console.log(`🔄 Sincronizando item:`, {
+                        type: item.type,
+                        endpoint: item.endpoint,
+                        id: item._id
+                    });
+                    
                     await this.syncItem(item);
                     
                     // Marcar como sincronizado
@@ -271,9 +300,10 @@ class DatabaseService {
                     item.syncedAt = Date.now();
                     await this.syncDB.put(item);
 
-                    console.log(`✅ Sincronizado: ${item.type}`);
+                    console.log(`✅ Sincronizado exitosamente: ${item.type}`);
                 } catch (error) {
                     console.error(`❌ Error sincronizando ${item.type}:`, error);
+                    console.error('Detalles del error:', error.message, error.stack);
                     // No marcamos como sincronizado, se reintentará
                 }
             }
@@ -310,11 +340,19 @@ class DatabaseService {
                 break;
 
             case 'INCIDENT_CREATE':
+                console.log('📤 Enviando incidencia al servidor:', item.endpoint);
                 const newIncident = await api.post(item.endpoint, item.data);
+                console.log('✅ Incidencia creada en servidor:', newIncident);
+                
                 // Reemplazar documento temporal con el real
                 if (item.tempId && newIncident.id) {
-                    const tempDoc = await this.incidentsDB.get(item.tempId);
-                    await this.incidentsDB.remove(tempDoc);
+                    try {
+                        const tempDoc = await this.incidentsDB.get(item.tempId);
+                        await this.incidentsDB.remove(tempDoc);
+                        console.log('🗑️ Documento temporal eliminado:', item.tempId);
+                    } catch (err) {
+                        console.warn('Documento temporal no encontrado:', item.tempId, err);
+                    }
                     
                     await this.incidentsDB.put({
                         _id: `incident_${newIncident.id}`,

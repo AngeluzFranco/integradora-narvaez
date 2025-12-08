@@ -29,15 +29,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Connectivity indicator
     updateConnectivityIndicator();
     window.addEventListener('online', async () => {
+        console.log('🌐 Evento ONLINE detectado en mucama-incidents');
         updateConnectivityIndicator();
         showToast('🌐 Conexión restaurada. Sincronizando...', 'info');
-        // Sincronizar cambios pendientes
-        await dbService.processSyncQueue();
-        // Recargar incidencias después de sincronizar
-        await loadIncidents();
-        showToast('✅ Sincronización completada', 'success');
+        
+        try {
+            // Sincronizar cambios pendientes
+            console.log('📤 Iniciando sincronización desde mucama-incidents...');
+            await dbService.processSyncQueue();
+            console.log('✅ Sincronización completada');
+            
+            // Recargar incidencias después de sincronizar
+            await loadIncidents();
+            showToast('✅ Sincronización completada', 'success');
+        } catch (error) {
+            console.error('❌ Error en sincronización:', error);
+            showToast('❌ Error al sincronizar', 'danger');
+        }
     });
-    window.addEventListener('offline', updateConnectivityIndicator);
+    window.addEventListener('offline', () => {
+        console.log('📴 Evento OFFLINE detectado en mucama-incidents');
+        updateConnectivityIndicator();
+    });
 
     // Cargar habitaciones asignadas (para el selector)
     await loadMyRooms();
