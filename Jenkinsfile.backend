@@ -1,0 +1,219 @@
+pipeline {
+    agent any
+    
+    environment {
+        // Variables configuradas en Jenkins (Global properties)
+        EC2_HOST = "${env.EC2_BACKEND_HOST}"
+        EC2_USER = "${env.EC2_USER}"
+        APP_DIR = "/home/ubuntu/hotel-app"
+        REPO_URL = "https://github.com/AngeluzFranco/integradora-narvaez.git"
+        BRANCH = "main"
+    }
+    
+    stages {
+        stage('Verificar Conexión SSH') {
+            steps {
+                script {
+                    echo "🔍 Verificando conexión con EC2 Backend..."
+                    sshagent(['ec2-backend-ssh']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
+                                echo "✅ Conexión SSH exitosa"
+                                echo "Host: \$(hostname)"
+                                echo "User: \$(whoami)"
+                                echo "Docker version: \$(docker --version)"
+                            '
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Clonar/Actualizar Repositorio en EC2') {
+            steps {
+                script {
+                    echo "📥 Clonando o actualizando repositorio en EC2..."
+                    sshagent(['ec2-backend-ssh']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
+                                # Crear directorio si no existe
+                                mkdir -p ${APP_DIR}
+                                cd ${APP_DIR}
+                                
+                                # Si existe .git, hacer pull, si no, clonar
+                                if [ -d ".git" ]; then
+                                    echo "📦 Repositorio existe, actualizando..."
+                                    git fetch origin
+                                    git reset --hard origin/${BRANCH}
+                                    git clean -fd
+                                else
+                                    echo "📦 Clonando repositorio..."
+                                    cd ..
+                                    rm -rf hotel-app
+                                    git clone ${REPO_URL} hotel-app
+                                    cd hotel-app
+                                    git checkout ${BRANCH}
+                                fi
+                                
+                                echo "✅ Código actualizado"
+                                git log -1 --oneline
+                            '
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Detener Servicios Anteriores') {
+            steps {
+                script {
+                    echo "🛑 Deteniendo servicios anteriores..."
+                    sshagent(['ec2-backend-ssh']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
+                                cd ${APP_DIR}
+                                
+                                # Detener contenedores si existen
+                                if [ -f "docker-compose.yml" ]; then
+                                    docker-compose down || true
+                                    echo "✅ Servicios detenidos"
+                                else
+                                    echo "⚠️  No se encontró docker-compose.yml"
+                                fi
+                            '
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Limpiar Imágenes Antiguas') {
+            steps {
+                script {
+                    echo "🧹 Limpiando imágenes antiguas..."
+                    sshagent(['ec2-backend-ssh']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
+                                # Eliminar imágenes del proyecto
+                                docker images --filter "label=com.docker.compose.project=integradora" -q | xargs -r docker rmi -f || echo "No hay imágenes que eliminar"
+                                
+                                # Limpiar recursos no utilizados (opcional)
+                                docker system prune -f
+                                
+                                echo "✅ Limpieza completada"
+                            '
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Construir y Desplegar Servicios') {
+            steps {
+                script {
+                    echo "🏗️  Construyendo y desplegando servicios..."
+                    sshagent(['ec2-backend-ssh']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
+                                cd ${APP_DIR}
+                                
+                                # Construir y levantar servicios
+                                echo "🔨 Iniciando docker-compose build..."
+                                docker-compose up --build -d
+                                
+                                echo "⏳ Esperando a que los servicios estén listos..."
+                                sleep 10
+                                
+                                # Verificar estado de los contenedores
+                                echo "📊 Estado de los contenedores:"
+                                docker-compose ps
+                                
+                                # Verificar logs del backend
+                                echo "📝 Últimos logs del backend:"
+                                docker logs hotel-backend --tail 50
+                                
+                                echo "✅ Servicios desplegados"
+                            '
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Verificar Salud de la Aplicación') {
+            steps {
+                script {
+                    echo "🏥 Verificando salud de la aplicación..."
+                    sshagent(['ec2-backend-ssh']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
+                                # Esperar a que el backend esté listo
+                                echo "⏳ Esperando a que el backend responda..."
+                                for i in {1..30}; do
+                                    if curl -s http://localhost:8081/api/rooms > /dev/null 2>&1; then
+                                        echo "✅ Backend está respondiendo"
+                                        break
+                                    fi
+                                    echo "Intento \$i/30..."
+                                    sleep 2
+                                done
+                                
+                                # Mostrar contenedores corriendo
+                                echo "🐳 Contenedores en ejecución:"
+                                docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+                                
+                                # Verificar uso de recursos
+                                echo "💾 Uso de recursos:"
+                                docker stats --no-stream
+                            '
+                        """
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo '''
+            ✅ ========================================
+            ✅ DESPLIEGUE EXITOSO EN EC2 BACKEND
+            ✅ ========================================
+            
+            🌐 API disponible en:
+               http://''' + "${EC2_HOST}" + ''':8081
+            
+            🔍 Endpoints para verificar:
+               http://''' + "${EC2_HOST}" + ''':8081/api/rooms
+               http://''' + "${EC2_HOST}" + ''':8081/api/users
+            
+            📊 Verificar estado:
+               ssh ubuntu@''' + "${EC2_HOST}" + ''' "docker ps"
+            '''
+        }
+        
+        failure {
+            echo '''
+            ❌ ========================================
+            ❌ ERROR EN EL DESPLIEGUE
+            ❌ ========================================
+            
+            🔍 Para diagnosticar, ejecuta:
+            
+            1. Conectar a EC2:
+               ssh -i ~/.ssh/hotel-app-key.pem ubuntu@''' + "${EC2_HOST}" + '''
+            
+            2. Ver logs:
+               cd /home/ubuntu/hotel-app
+               docker-compose logs
+            
+            3. Verificar contenedores:
+               docker ps -a
+            '''
+        }
+        
+        always {
+            echo '🏁 Pipeline finalizado'
+        }
+    }
+}
