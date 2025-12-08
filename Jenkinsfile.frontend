@@ -8,7 +8,6 @@ pipeline {
         APP_DIR = "/home/ubuntu/hotel-app"
         REPO_URL = "https://github.com/AngeluzFranco/integradora-narvaez.git"
         BRANCH = "main"
-        GIT_BASH = "C:\\Program Files\\Git\\bin\\bash.exe"
     }
     
     stages {
@@ -17,8 +16,9 @@ pipeline {
                 script {
                     echo "🔍 Verificando conexión con EC2 Frontend..."
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
-                        bat """
-                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'echo Conexion SSH exitosa && hostname && whoami && docker --version'"
+                        powershell """
+                            \$env:PATH = "C:\\Program Files\\Git\\usr\\bin;" + \$env:PATH
+                            ssh -i "\$env:SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@${EC2_HOST} 'echo "Conexion SSH exitosa" && hostname && whoami && docker --version'
                         """
                     }
                 }
@@ -30,21 +30,23 @@ pipeline {
                 script {
                     echo "📥 Clonando o actualizando repositorio en EC2..."
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
-                        bat """
-                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'mkdir -p ${APP_DIR} && cd ${APP_DIR} && if [ -d .git ]; then echo Actualizando repo... && git fetch origin && git reset --hard origin/${BRANCH} && git clean -fd; else echo Clonando repo... && cd .. && rm -rf hotel-app && git clone ${REPO_URL} hotel-app && cd hotel-app && git checkout ${BRANCH}; fi && echo Codigo actualizado && git log -1 --oneline'"
+                        powershell """
+                            \$env:PATH = "C:\\Program Files\\Git\\usr\\bin;" + \$env:PATH
+                            ssh -i "\$env:SSH_KEY" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'mkdir -p ${APP_DIR} && cd ${APP_DIR} && if [ -d .git ]; then echo Actualizando repo && git fetch origin && git reset --hard origin/${BRANCH} && git clean -fd; else echo Clonando repo && cd .. && rm -rf hotel-app && git clone ${REPO_URL} hotel-app && cd hotel-app && git checkout ${BRANCH}; fi && echo Codigo actualizado'
                         """
                     }
                 }
             }
         }
         
-        stage('Actualizar config.js con IP Backend') {
+        stage('Actualizar config.js') {
             steps {
                 script {
                     echo "⚙️ Actualizando config.js con IP del backend..."
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
-                        bat """
-                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'cd ${APP_DIR}/client/js && sed -i \"s|API_URL: .*|API_URL: \\\"http://${EC2_BACKEND_HOST}:8081\\\",|\" config.js && sed -i \"s|WS_URL: .*|WS_URL: \\\"ws://${EC2_BACKEND_HOST}:8081/ws\\\"|\" config.js && echo Config actualizado: && cat config.js | grep -E \"API_URL|WS_URL\"'"
+                        powershell """
+                            \$env:PATH = "C:\\Program Files\\Git\\usr\\bin;" + \$env:PATH
+                            ssh -i "\$env:SSH_KEY" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'cd ${APP_DIR}/client/js && sed -i \"s|API_URL:.*|API_URL: \\\"http://${EC2_BACKEND_HOST}:8081\\\",|\" config.js && sed -i \"s|WS_URL:.*|WS_URL: \\\"ws://${EC2_BACKEND_HOST}:8081/ws\\\"|\" config.js && echo Config actualizado'
                         """
                     }
                 }
@@ -56,8 +58,9 @@ pipeline {
                 script {
                     echo "🛑 Deteniendo servicios anteriores..."
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
-                        bat """
-                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'cd ${APP_DIR} && if [ -f docker-compose.frontend.yml ]; then docker-compose -f docker-compose.frontend.yml down || true && echo Servicios detenidos; else echo No se encontro docker-compose.frontend.yml; fi'"
+                        powershell """
+                            \$env:PATH = "C:\\Program Files\\Git\\usr\\bin;" + \$env:PATH
+                            ssh -i "\$env:SSH_KEY" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'cd ${APP_DIR} && if [ -f docker-compose.frontend.yml ]; then docker-compose -f docker-compose.frontend.yml down || true && echo Servicios detenidos; else echo No hay docker-compose; fi'
                         """
                     }
                 }
@@ -69,8 +72,9 @@ pipeline {
                 script {
                     echo "🧹 Limpiando imágenes antiguas..."
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
-                        bat """
-                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'docker system prune -f && echo Limpieza completada'"
+                        powershell """
+                            \$env:PATH = "C:\\Program Files\\Git\\usr\\bin;" + \$env:PATH
+                            ssh -i "\$env:SSH_KEY" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'docker system prune -f && echo Limpieza completada'
                         """
                     }
                 }
@@ -82,8 +86,9 @@ pipeline {
                 script {
                     echo "🏗️ Construyendo y desplegando frontend..."
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
-                        bat """
-                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'cd ${APP_DIR} && echo Iniciando docker-compose build... && docker-compose -f docker-compose.frontend.yml up --build -d && sleep 5 && echo Frontend desplegado'"
+                        powershell """
+                            \$env:PATH = "C:\\Program Files\\Git\\usr\\bin;" + \$env:PATH
+                            ssh -i "\$env:SSH_KEY" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'cd ${APP_DIR} && echo Iniciando build && docker-compose -f docker-compose.frontend.yml up --build -d && sleep 5'
                         """
                     }
                 }
@@ -95,8 +100,9 @@ pipeline {
                 script {
                     echo "🏥 Verificando despliegue del frontend..."
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-frontend-ssh', keyFileVariable: 'SSH_KEY')]) {
-                        bat """
-                            "${GIT_BASH}" -c "ssh -i '${SSH_KEY}' -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'echo Verificando frontend... && for i in {1..20}; do if curl -s -o /dev/null -w \"%{http_code}\" http://localhost/ | grep -q 200; then echo Frontend respondiendo; break; fi; echo Intento \\$i/20...; sleep 2; done && echo Estado contenedores: && docker-compose -f ${APP_DIR}/docker-compose.frontend.yml ps'"
+                        powershell """
+                            \$env:PATH = "C:\\Program Files\\Git\\usr\\bin;" + \$env:PATH
+                            ssh -i "\$env:SSH_KEY" -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} 'echo Verificando frontend && sleep 10 && docker logs hotel-frontend --tail 20 && docker ps'
                         """
                     }
                 }
