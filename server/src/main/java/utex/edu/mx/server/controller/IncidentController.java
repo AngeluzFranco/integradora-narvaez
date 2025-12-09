@@ -73,14 +73,19 @@ public class IncidentController {
         incident.setUpdatedAt(LocalDateTime.now());
         Incident savedIncident = incidentRepository.save(incident);
         
-        // Broadcast WebSocket notification
-        WebSocketNotification notification = new WebSocketNotification(
-            "INCIDENT_CREATED",
-            "Nueva incidencia reportada en Hab. " + (savedIncident.getRoom() != null ? savedIncident.getRoom().getNumber() : "N/A"),
-            savedIncident
-        );
-        messagingTemplate.convertAndSend("/topic/incidents", notification);
-        messagingTemplate.convertAndSend("/topic/notifications", notification);
+        // Broadcast WebSocket notification (sin el objeto completo para evitar errores de serialización)
+        try {
+            WebSocketNotification notification = new WebSocketNotification(
+                "INCIDENT_CREATED",
+                "Nueva incidencia reportada en Hab. " + (savedIncident.getRoom() != null ? savedIncident.getRoom().getNumber() : "N/A"),
+                savedIncident.getId() // Solo enviar el ID en lugar del objeto completo
+            );
+            messagingTemplate.convertAndSend("/topic/incidents", notification);
+            messagingTemplate.convertAndSend("/topic/notifications", notification);
+        } catch (Exception wsError) {
+            // Log error but don't fail the request
+            System.err.println("Error sending WebSocket notification: " + wsError.getMessage());
+        }
         
         return ResponseEntity.ok(savedIncident);
     }
@@ -97,12 +102,16 @@ public class IncidentController {
                     Incident updatedIncident = incidentRepository.save(incident);
                     
                     // Broadcast WebSocket notification
-                    WebSocketNotification notification = new WebSocketNotification(
-                        "INCIDENT_UPDATED",
-                        "Incidencia actualizada",
-                        updatedIncident
-                    );
-                    messagingTemplate.convertAndSend("/topic/incidents", notification);
+                    try {
+                        WebSocketNotification notification = new WebSocketNotification(
+                            "INCIDENT_UPDATED",
+                            "Incidencia actualizada",
+                            updatedIncident.getId()
+                        );
+                        messagingTemplate.convertAndSend("/topic/incidents", notification);
+                    } catch (Exception wsError) {
+                        System.err.println("Error sending WebSocket notification: " + wsError.getMessage());
+                    }
                     
                     return ResponseEntity.ok(updatedIncident);
                 })
@@ -120,13 +129,17 @@ public class IncidentController {
                     Incident resolvedIncident = incidentRepository.save(incident);
                     
                     // Broadcast WebSocket notification
-                    WebSocketNotification notification = new WebSocketNotification(
-                        "INCIDENT_RESOLVED",
-                        "Incidencia resuelta en Hab. " + (resolvedIncident.getRoom() != null ? resolvedIncident.getRoom().getNumber() : "N/A"),
-                        resolvedIncident
-                    );
-                    messagingTemplate.convertAndSend("/topic/incidents", notification);
-                    messagingTemplate.convertAndSend("/topic/notifications", notification);
+                    try {
+                        WebSocketNotification notification = new WebSocketNotification(
+                            "INCIDENT_RESOLVED",
+                            "Incidencia resuelta en Hab. " + (resolvedIncident.getRoom() != null ? resolvedIncident.getRoom().getNumber() : "N/A"),
+                            resolvedIncident.getId()
+                        );
+                        messagingTemplate.convertAndSend("/topic/incidents", notification);
+                        messagingTemplate.convertAndSend("/topic/notifications", notification);
+                    } catch (Exception wsError) {
+                        System.err.println("Error sending WebSocket notification: " + wsError.getMessage());
+                    }
                     
                     return ResponseEntity.ok(resolvedIncident);
                 })

@@ -73,12 +73,16 @@ public class RoomController {
                     Room updatedRoom = roomRepository.save(room);
                     
                     // Broadcast WebSocket notification
-                    WebSocketNotification notification = new WebSocketNotification(
-                        "ROOM_UPDATED",
-                        "Habitación " + updatedRoom.getNumber() + " actualizada",
-                        updatedRoom
-                    );
-                    messagingTemplate.convertAndSend("/topic/rooms", notification);
+                    try {
+                        WebSocketNotification notification = new WebSocketNotification(
+                            "ROOM_UPDATED",
+                            "Habitación " + updatedRoom.getNumber() + " actualizada",
+                            updatedRoom.getId()
+                        );
+                        messagingTemplate.convertAndSend("/topic/rooms", notification);
+                    } catch (Exception wsError) {
+                        System.err.println("Error sending WebSocket notification: " + wsError.getMessage());
+                    }
                     
                     return ResponseEntity.ok(updatedRoom);
                 })
@@ -94,13 +98,17 @@ public class RoomController {
                     Room updatedRoom = roomRepository.save(room);
                     
                     // Broadcast WebSocket notification
-                    WebSocketNotification notification = new WebSocketNotification(
-                        "ROOM_STATUS_CHANGED",
-                        "Habitación " + updatedRoom.getNumber() + " ahora está " + status,
-                        updatedRoom
-                    );
-                    messagingTemplate.convertAndSend("/topic/rooms", notification);
-                    messagingTemplate.convertAndSend("/topic/notifications", notification);
+                    try {
+                        WebSocketNotification notification = new WebSocketNotification(
+                            "ROOM_STATUS_CHANGED",
+                            "Habitación " + updatedRoom.getNumber() + " ahora está " + status,
+                            updatedRoom.getId()
+                        );
+                        messagingTemplate.convertAndSend("/topic/rooms", notification);
+                        messagingTemplate.convertAndSend("/topic/notifications", notification);
+                    } catch (Exception wsError) {
+                        System.err.println("Error sending WebSocket notification: " + wsError.getMessage());
+                    }
                     
                     return ResponseEntity.ok(updatedRoom);
                 })
@@ -143,13 +151,17 @@ public class RoomController {
                     Room updatedRoom = roomRepository.save(room);
                     
                     // Notificar vía WebSocket
-                    WebSocketNotification notification = new WebSocketNotification(
-                        "ROOM_REASSIGNED",
-                        "Habitación " + updatedRoom.getNumber() + " reasignada",
-                        updatedRoom
-                    );
-                    messagingTemplate.convertAndSend("/topic/rooms", notification);
-                    messagingTemplate.convertAndSend("/topic/notifications", notification);
+                    try {
+                        WebSocketNotification notification = new WebSocketNotification(
+                            "ROOM_REASSIGNED",
+                            "Habitación " + updatedRoom.getNumber() + " reasignada",
+                            updatedRoom.getId()
+                        );
+                        messagingTemplate.convertAndSend("/topic/rooms", notification);
+                        messagingTemplate.convertAndSend("/topic/notifications", notification);
+                    } catch (Exception wsError) {
+                        System.err.println("Error sending WebSocket notification: " + wsError.getMessage());
+                    }
                     
                     return ResponseEntity.ok(updatedRoom);
                 })
