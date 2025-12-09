@@ -48,10 +48,30 @@ class ApiService {
             }
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                // Intentar obtener el mensaje de error del backend
+                let errorMessage = response.statusText;
+                try {
+                    const errorText = await response.text();
+                    if (errorText) {
+                        errorMessage = errorText;
+                    }
+                } catch (e) {
+                    // Si no se puede leer el texto, usar statusText
+                }
+                
+                const error = new Error(`HTTP ${response.status}: ${errorMessage}`);
+                error.response = errorMessage;
+                error.status = response.status;
+                throw error;
             }
 
-            return await response.json();
+            // Intentar parsear como JSON, si falla retornar texto
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return await response.json();
+            }
+            
+            return await response.text();
         } catch (error) {
             console.error('API Error:', error);
             throw error;

@@ -76,27 +76,40 @@ public class UserController {
      * Crear nuevo usuario
      */
     @PostMapping
-    public ResponseEntity<User> createUser(@RequestBody User user) {
+    public ResponseEntity<?> createUser(@RequestBody User user) {
         // Validaciones
         if (user.getUsername() == null || user.getUsername().trim().isEmpty()) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body("Username es requerido");
+        }
+        
+        if (user.getName() == null || user.getName().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Nombre es requerido");
+        }
+        
+        if (user.getRole() == null) {
+            return ResponseEntity.badRequest().body("Rol es requerido");
         }
         
         // Verificar que el username no exista
         if (userRepository.findByUsername(user.getUsername()).isPresent()) {
-            return ResponseEntity.badRequest().build(); // Username ya existe
+            return ResponseEntity.badRequest().body("Username ya existe");
         }
         
         // Encriptar password
-        if (user.getPassword() != null && !user.getPassword().isEmpty()) {
-            user.setPassword(passwordEncoder.encode(user.getPassword()));
-        } else {
-            return ResponseEntity.badRequest().build(); // Password requerido
+        if (user.getPassword() == null || user.getPassword().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Password es requerido");
         }
+        
+        if (user.getPassword().length() < 4) {
+            return ResponseEntity.badRequest().body("Password debe tener al menos 4 caracteres");
+        }
+        
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
         
         // Setear valores por defecto
         user.setActive(true);
         user.setCreatedAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
         
         User savedUser = userRepository.save(user);
         return ResponseEntity.ok(savedUser);
@@ -107,9 +120,22 @@ public class UserController {
      * Actualizar usuario existente
      */
     @PutMapping("/{id}")
-    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody User userDetails) {
+    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User userDetails) {
         return userRepository.findById(id)
                 .map(user -> {
+                    // Validar campos requeridos
+                    if (userDetails.getName() != null && userDetails.getName().trim().isEmpty()) {
+                        return ResponseEntity.badRequest().body("Nombre no puede estar vacío");
+                    }
+                    
+                    // Actualizar username solo si cambió y no existe
+                    if (userDetails.getUsername() != null && !userDetails.getUsername().equals(user.getUsername())) {
+                        if (userRepository.findByUsername(userDetails.getUsername()).isPresent()) {
+                            return ResponseEntity.badRequest().body("Username ya existe");
+                        }
+                        user.setUsername(userDetails.getUsername());
+                    }
+                    
                     // Actualizar campos permitidos
                     if (userDetails.getName() != null) {
                         user.setName(userDetails.getName());
@@ -126,9 +152,13 @@ public class UserController {
                     
                     // Solo actualizar password si se proporciona uno nuevo
                     if (userDetails.getPassword() != null && !userDetails.getPassword().isEmpty()) {
+                        if (userDetails.getPassword().length() < 4) {
+                            return ResponseEntity.badRequest().body("Password debe tener al menos 4 caracteres");
+                        }
                         user.setPassword(passwordEncoder.encode(userDetails.getPassword()));
                     }
                     
+                    user.setUpdatedAt(LocalDateTime.now());
                     User updatedUser = userRepository.save(user);
                     return ResponseEntity.ok(updatedUser);
                 })
@@ -140,10 +170,16 @@ public class UserController {
      * Activar/desactivar usuario
      */
     @PatchMapping("/{id}/activate")
-    public ResponseEntity<User> toggleUserStatus(@PathVariable Long id, @RequestBody Boolean active) {
+    public ResponseEntity<?> toggleUserStatus(@PathVariable Long id, @RequestBody Boolean active) {
         return userRepository.findById(id)
                 .map(user -> {
+                    // Prevenir desactivación de administradores
+                    if (user.getRole() == User.Role.ADMIN && !active) {
+                        return ResponseEntity.badRequest().body("No se puede desactivar un usuario administrador");
+                    }
+                    
                     user.setActive(active);
+                    user.setUpdatedAt(LocalDateTime.now());
                     User updatedUser = userRepository.save(user);
                     return ResponseEntity.ok(updatedUser);
                 })
@@ -155,13 +191,19 @@ public class UserController {
      * Eliminar usuario (soft delete - marca como inactivo)
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+    public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         return userRepository.findById(id)
                 .map(user -> {
+                    // Prevenir eliminación de administradores
+                    if (user.getRole() == User.Role.ADMIN) {
+                        return ResponseEntity.badRequest().body("No se puede eliminar un usuario administrador");
+                    }
+                    
                     // Soft delete: marcar como inactivo en lugar de eliminar
                     user.setActive(false);
+                    user.setUpdatedAt(LocalDateTime.now());
                     userRepository.save(user);
-                    return ResponseEntity.ok().<Void>build();
+                    return ResponseEntity.ok().build();
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

@@ -159,12 +159,24 @@ async function saveUser() {
             username: document.getElementById('userUsername').value.trim(),
             email: document.getElementById('userEmail').value.trim(),
             role: document.getElementById('userRole').value,
-            password: document.getElementById('userPassword').value
+            password: document.getElementById('userPassword').value.trim()
         };
 
-        // Validaciones
+        // Validaciones frontend
         if (!userData.name || !userData.username || !userData.role) {
             showToast('Complete todos los campos requeridos', 'warning');
+            return;
+        }
+
+        // Validar username (sin espacios, caracteres especiales básicos)
+        if (!/^[a-zA-Z0-9_.-]+$/.test(userData.username)) {
+            showToast('Username solo puede contener letras, números, guiones y puntos', 'warning');
+            return;
+        }
+
+        // Validar email si se proporciona
+        if (userData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userData.email)) {
+            showToast('Email inválido', 'warning');
             return;
         }
 
@@ -173,8 +185,12 @@ async function saveUser() {
             // Si no se proporciona password, no se actualizará
             if (!userData.password) {
                 delete userData.password;
+            } else if (userData.password.length < 4) {
+                showToast('La contraseña debe tener al menos 4 caracteres', 'warning');
+                return;
             }
-            await api.put(ENDPOINTS.USER_BY_ID(editingUserId), userData);
+            
+            const response = await api.put(ENDPOINTS.USER_BY_ID(editingUserId), userData);
             showToast('Usuario actualizado correctamente', 'success');
         } else {
             // Crear nuevo usuario
@@ -182,7 +198,8 @@ async function saveUser() {
                 showToast('La contraseña debe tener al menos 4 caracteres', 'warning');
                 return;
             }
-            await api.post(ENDPOINTS.USERS, userData);
+            
+            const response = await api.post(ENDPOINTS.USERS, userData);
             showToast('Usuario creado correctamente', 'success');
         }
 
@@ -195,37 +212,78 @@ async function saveUser() {
 
     } catch (error) {
         console.error('Error saving user:', error);
-        if (error.message.includes('400')) {
-            showToast('Username ya existe o datos inválidos', 'danger');
-        } else {
-            showToast('Error al guardar usuario', 'danger');
+        
+        // Intentar extraer mensaje del error
+        let errorMessage = 'Error al guardar usuario';
+        
+        if (error.response) {
+            // El servidor respondió con un error
+            errorMessage = typeof error.response === 'string' ? error.response : 'Datos inválidos';
+        } else if (error.message) {
+            if (error.message.includes('400')) {
+                errorMessage = 'Verifique los datos ingresados';
+            } else if (error.message.includes('409')) {
+                errorMessage = 'Username ya existe';
+            } else if (error.message.includes('500')) {
+                errorMessage = 'Error en el servidor';
+            }
         }
+        
+        showToast(errorMessage, 'danger');
     }
 }
 
 // Activar/desactivar usuario
 window.toggleUserStatus = async (userId, newStatus) => {
     try {
+        // Buscar el usuario para verificar su rol
+        const user = allUsers.find(u => u.id === userId);
+        
+        if (user && user.role === USER_ROLES.ADMIN && !newStatus) {
+            showToast('No se puede desactivar un usuario administrador', 'warning');
+            return;
+        }
+        
         await api.patch(ENDPOINTS.USER_ACTIVATE(userId), newStatus);
         showToast(`Usuario ${newStatus ? 'activado' : 'desactivado'} correctamente`, 'success');
         await loadUsers();
     } catch (error) {
         console.error('Error toggling user status:', error);
-        showToast('Error al cambiar estado', 'danger');
+        
+        let errorMessage = 'Error al cambiar estado';
+        if (error.response && typeof error.response === 'string') {
+            errorMessage = error.response;
+        }
+        
+        showToast(errorMessage, 'danger');
     }
 };
 
 // Eliminar usuario (soft delete)
 window.deleteUser = async (userId) => {
-    if (!confirm('¿Está seguro de eliminar este usuario?')) return;
-
     try {
+        // Buscar el usuario para verificar su rol
+        const user = allUsers.find(u => u.id === userId);
+        
+        if (user && user.role === USER_ROLES.ADMIN) {
+            showToast('No se puede eliminar un usuario administrador', 'warning');
+            return;
+        }
+        
+        if (!confirm(`¿Está seguro de eliminar al usuario ${user ? user.name : ''}?`)) return;
+        
         await api.delete(ENDPOINTS.USER_BY_ID(userId));
         showToast('Usuario eliminado correctamente', 'success');
         await loadUsers();
     } catch (error) {
         console.error('Error deleting user:', error);
-        showToast('Error al eliminar usuario', 'danger');
+        
+        let errorMessage = 'Error al eliminar usuario';
+        if (error.response && typeof error.response === 'string') {
+            errorMessage = error.response;
+        }
+        
+        showToast(errorMessage, 'danger');
     }
 };
 

@@ -30,10 +30,66 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadIncidents();
     setupFilters();
     setupResolveForm();
+    setupForceCleanButton();
 
     // Auto-refresh cada 30 segundos
     setInterval(loadIncidents, 30000);
 });
+
+// Setup botón de limpieza forzada
+function setupForceCleanButton() {
+    document.getElementById('forceCleanIncidentsBtn').addEventListener('click', async () => {
+        if (!confirm('¿Está seguro de forzar la limpieza de todas las incidencias antiguas?\n\nEsto marcará como resueltas todas las incidencias creadas antes de las 8:00 AM de hoy.')) {
+            return;
+        }
+        
+        await forceCleanOldIncidents();
+    });
+}
+
+// Forzar limpieza de incidencias antiguas (anteriores a las 8 AM de hoy)
+async function forceCleanOldIncidents() {
+    try {
+        const now = new Date();
+        const today8AM = new Date(now);
+        today8AM.setHours(8, 0, 0, 0);
+        
+        // Obtener TODAS las incidencias sin filtro
+        const allIncidentsRaw = await api.get(ENDPOINTS.INCIDENTS);
+        
+        // Filtrar solo las incidencias abiertas creadas antes de las 8 AM de hoy
+        const oldIncidents = allIncidentsRaw.filter(incident => {
+            if (incident.status !== INCIDENT_STATUS.OPEN) return false;
+            
+            const createdAt = new Date(incident.createdAt);
+            return createdAt < today8AM;
+        });
+        
+        if (oldIncidents.length === 0) {
+            showToast('No hay incidencias antiguas para limpiar', 'info');
+            return;
+        }
+        
+        // Resolver cada incidencia antigua
+        let successCount = 0;
+        for (const incident of oldIncidents) {
+            try {
+                await api.patch(ENDPOINTS.INCIDENT_RESOLVE(incident.id), 
+                    'Incidencia resuelta automáticamente por limpieza forzada del sistema');
+                successCount++;
+            } catch (error) {
+                console.error(`Error resolviendo incidencia ${incident.id}:`, error);
+            }
+        }
+        
+        showToast(`${successCount} de ${oldIncidents.length} incidencias limpiadas correctamente`, 'success');
+        await loadIncidents();
+        
+    } catch (error) {
+        console.error('Error en limpieza forzada:', error);
+        showToast('Error al forzar limpieza de incidencias', 'danger');
+    }
+}
 
 // Filtrar incidencias creadas antes de las 8 AM del día actual
 function filterIncidentsByTime(incidents) {
