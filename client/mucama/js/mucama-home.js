@@ -290,6 +290,29 @@ function setupStatusButtons() {
     }
 }
 
+// Verificar si una habitación tiene incidencias activas
+async function checkActiveIncidents(roomId) {
+    try {
+        if (navigator.onLine) {
+            const incidents = await api.get(ENDPOINTS.INCIDENTS_BY_ROOM(roomId));
+            // Filtrar solo incidencias abiertas
+            const activeIncidents = incidents.filter(i => i.status === 'OPEN');
+            return activeIncidents.length > 0;
+        } else {
+            // En modo offline, verificar en la base de datos local
+            const localIncidents = await dbService.getIncidentsLocal();
+            const roomIncidents = localIncidents.filter(i => 
+                i.room && i.room.id === roomId && i.status === 'OPEN'
+            );
+            return roomIncidents.length > 0;
+        }
+    } catch (error) {
+        console.error('Error verificando incidencias:', error);
+        // En caso de error, por seguridad asumir que sí hay incidencias
+        return true;
+    }
+}
+
 // Actualizar estado de habitación
 // Backend: RoomController.updateRoomStatus() - PATCH /api/rooms/{id}/status
 // Offline: Guarda en PouchDB y cola de sincronización
@@ -326,6 +349,15 @@ async function updateRoomStatus(roomId, status) {
         if (room.status === ROOM_STATUS.CLEAN) {
             showToast('✅ Esta habitación ya está limpia', 'info');
             return;
+        }
+
+        // NUEVA VALIDACIÓN: Verificar si hay incidencias activas antes de marcar como limpia
+        if (status === ROOM_STATUS.CLEAN) {
+            const hasActiveIncidents = await checkActiveIncidents(roomId);
+            if (hasActiveIncidents) {
+                showToast('⛔ No se puede marcar como limpia. Esta habitación tiene incidencias activas que deben resolverse primero.', 'danger');
+                return;
+            }
         }
 
         // Cerrar modal

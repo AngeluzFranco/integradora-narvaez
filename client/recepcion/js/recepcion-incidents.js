@@ -35,11 +35,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     setInterval(loadIncidents, 30000);
 });
 
+// Filtrar incidencias creadas antes de las 8 AM del día actual
+function filterIncidentsByTime(incidents) {
+    const now = new Date();
+    const today8AM = new Date(now);
+    today8AM.setHours(8, 0, 0, 0); // 8:00 AM de hoy
+    
+    // Si aún no son las 8 AM, mostrar todas
+    if (now < today8AM) {
+        return incidents;
+    }
+    
+    // Si ya pasaron las 8 AM, filtrar solo las creadas después de las 8 AM de hoy
+    return incidents.filter(incident => {
+        const createdAt = new Date(incident.createdAt);
+        return createdAt >= today8AM;
+    });
+}
+
 // Cargar todas las incidencias
 // Backend: IncidentController.getAllIncidents() - GET /api/incidents
 async function loadIncidents() {
     try {
-        allIncidents = await api.get(ENDPOINTS.INCIDENTS);
+        const incidents = await api.get(ENDPOINTS.INCIDENTS);
+        allIncidents = filterIncidentsByTime(incidents); // Aplicar filtro de tiempo
         applyFilters();
         updateCounts();
     } catch (error) {

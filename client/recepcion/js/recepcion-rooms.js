@@ -272,7 +272,8 @@ function getStatusText(status) {
     const map = {
         [ROOM_STATUS.CLEAN]: 'Limpia',
         [ROOM_STATUS.DIRTY]: 'Sucia',
-        [ROOM_STATUS.OCCUPIED]: 'Ocupada'
+        [ROOM_STATUS.OCCUPIED]: 'Ocupada',
+        [ROOM_STATUS.BLOCKED]: 'Bloqueada'
     };
     return map[status] || status;
 }

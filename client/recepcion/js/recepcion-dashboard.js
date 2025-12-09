@@ -40,15 +40,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     setInterval(loadDashboard, 60000);
 });
 
+// Filtrar incidencias creadas antes de las 8 AM del día actual
+function filterIncidentsByTime(incidents) {
+    const now = new Date();
+    const today8AM = new Date(now);
+    today8AM.setHours(8, 0, 0, 0); // 8:00 AM de hoy
+    
+    // Si aún no son las 8 AM, mostrar todas
+    if (now < today8AM) {
+        return incidents;
+    }
+    
+    // Si ya pasaron las 8 AM, filtrar solo las creadas después de las 8 AM de hoy
+    return incidents.filter(incident => {
+        const createdAt = new Date(incident.createdAt);
+        return createdAt >= today8AM;
+    });
+}
+
 // Cargar todos los datos del dashboard
 async function loadDashboard() {
     try {
         // Llamadas en paralelo para eficiencia
         // Backend: RoomController.getAllRooms(), IncidentController.getAllIncidents()
-        const [rooms, incidents] = await Promise.all([
+        const [rooms, allIncidents] = await Promise.all([
             api.get(ENDPOINTS.ROOMS),
             api.get(ENDPOINTS.INCIDENTS)
         ]);
+
+        // Aplicar filtro de tiempo a las incidencias
+        const incidents = filterIncidentsByTime(allIncidents);
 
         updateKPIs(rooms, incidents);
         updateCharts(rooms, incidents);
@@ -66,25 +87,43 @@ async function loadDashboard() {
 function updateKPIs(rooms, incidents) {
     const cleanRooms = rooms.filter(r => r.status === ROOM_STATUS.CLEAN).length;
     const dirtyRooms = rooms.filter(r => r.status === ROOM_STATUS.DIRTY).length;
-    const occupiedRooms = rooms.filter(r => r.status === ROOM_STATUS.OCCUPIED).length;
+    
+    // Calcular habitaciones bloqueadas (con incidencias activas)
+    const roomsWithActiveIncidents = new Set();
+    incidents.filter(i => i.status === INCIDENT_STATUS.OPEN).forEach(incident => {
+        if (incident.room && incident.room.id) {
+            roomsWithActiveIncidents.add(incident.room.id);
+        }
+    });
+    const blockedRooms = roomsWithActiveIncidents.size;
+    
     const openIncidents = incidents.filter(i => i.status === INCIDENT_STATUS.OPEN).length;
 
     document.getElementById('kpiClean').textContent = cleanRooms;
     document.getElementById('kpiDirty').textContent = dirtyRooms;
-    document.getElementById('kpiOccupied').textContent = occupiedRooms;
+    document.getElementById('kpiOccupied').textContent = blockedRooms; // Mostrar bloqueadas en lugar de ocupadas
     document.getElementById('kpiIncidents').textContent = openIncidents;
 }
 
 // Actualizar gráficas con Chart.js
 function updateCharts(rooms, incidents) {
+    // Calcular habitaciones bloqueadas (con incidencias activas)
+    const roomsWithActiveIncidents = new Set();
+    incidents.filter(i => i.status === INCIDENT_STATUS.OPEN).forEach(incident => {
+        if (incident.room && incident.room.id) {
+            roomsWithActiveIncidents.add(incident.room.id);
+        }
+    });
+    const blockedRooms = roomsWithActiveIncidents.size;
+    
     // Gráfica de habitaciones por estado
     const roomsData = {
-        labels: ['Limpias', 'Sucias', 'Ocupadas'],
+        labels: ['Limpias', 'Sucias', 'Bloqueadas'],
         datasets: [{
             data: [
                 rooms.filter(r => r.status === ROOM_STATUS.CLEAN).length,
                 rooms.filter(r => r.status === ROOM_STATUS.DIRTY).length,
-                rooms.filter(r => r.status === ROOM_STATUS.OCCUPIED).length
+                blockedRooms
             ],
             backgroundColor: ['#198754', '#ffc107', '#dc3545']
         }]

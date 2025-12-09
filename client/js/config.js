@@ -43,7 +43,8 @@ export const ENDPOINTS = {
 export const ROOM_STATUS = {
     CLEAN: 'CLEAN',       // Limpia
     DIRTY: 'DIRTY',       // Sucia
-    OCCUPIED: 'OCCUPIED'  // Ocupada
+    OCCUPIED: 'OCCUPIED', // Ocupada
+    BLOCKED: 'BLOCKED'    // Bloqueada (con incidencia activa)
 };
 
 // Estados de incidencias (Incident.IncidentStatus enum)

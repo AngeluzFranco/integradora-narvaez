@@ -167,6 +167,24 @@ function checkPendingIncidentRoom() {
     }
 }
 
+// Filtrar incidencias creadas antes de las 8 AM del día actual
+function filterIncidentsByTime(incidents) {
+    const now = new Date();
+    const today8AM = new Date(now);
+    today8AM.setHours(8, 0, 0, 0); // 8:00 AM de hoy
+    
+    // Si aún no son las 8 AM, mostrar todas
+    if (now < today8AM) {
+        return incidents;
+    }
+    
+    // Si ya pasaron las 8 AM, filtrar solo las creadas después de las 8 AM de hoy
+    return incidents.filter(incident => {
+        const createdAt = new Date(incident.createdAt);
+        return createdAt >= today8AM;
+    });
+}
+
 // Cargar incidencias de esta mucama (con offline)
 // Backend: IncidentController.getIncidentsByMaid() - GET /api/incidents/maid/{maidId}
 async function loadIncidents() {
@@ -175,13 +193,14 @@ async function loadIncidents() {
         
         if (navigator.onLine) {
             const incidents = await api.get(ENDPOINTS.INCIDENTS_BY_MAID(userData.userId));
-            allIncidents = incidents;
+            allIncidents = filterIncidentsByTime(incidents); // Aplicar filtro de tiempo
             
             // Guardar en local
-            await dbService.saveIncidentsLocal(incidents);
+            await dbService.saveIncidentsLocal(allIncidents);
         } else {
             // Usar cache local
-            allIncidents = await dbService.getIncidentsLocal();
+            const cachedIncidents = await dbService.getIncidentsLocal();
+            allIncidents = filterIncidentsByTime(cachedIncidents); // Aplicar filtro de tiempo
         }
         
         renderIncidents(filterIncidents(allIncidents));
@@ -190,7 +209,8 @@ async function loadIncidents() {
         console.error('Error loading incidents:', error);
         // Intentar cargar desde cache
         try {
-            allIncidents = await dbService.getIncidentsLocal();
+            const cachedIncidents = await dbService.getIncidentsLocal();
+            allIncidents = filterIncidentsByTime(cachedIncidents); // Aplicar filtro de tiempo
             renderIncidents(filterIncidents(allIncidents));
             showToast('📴 Usando datos guardados', 'info');
         } catch (e) {
