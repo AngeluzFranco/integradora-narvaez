@@ -49,9 +49,11 @@ class DatabaseService {
                 }
             });
 
-            // Sincronizar si hay conexión
+            // Sincronizar si hay conexión (no bloqueante)
             if (this.isOnline) {
-                await this.syncAll();
+                this.syncAll().catch(err => {
+                    console.warn('⚠️ Sincronización inicial falló, continuando sin datos offline:', err);
+                });
             }
 
         } catch (error) {
@@ -467,23 +469,44 @@ class DatabaseService {
             const api = apiModule.default;
 
             const userData = api.getUserData();
-            if (!userData) return;
+            if (!userData) {
+                console.log('⚠️ No hay datos de usuario, sincronización omitida');
+                return;
+            }
 
-            // Sincronizar habitaciones
+            // Sincronizar habitaciones y incidencias (cada una de forma independiente)
             if (userData.role === 'MAID') {
-                const rooms = await api.get(ENDPOINTS.ROOMS_BY_MAID(userData.userId));
-                await this.saveRoomsLocal(rooms);
+                // Sincronizar habitaciones
+                try {
+                    const rooms = await api.get(ENDPOINTS.ROOMS_BY_MAID(userData.userId));
+                    await this.saveRoomsLocal(rooms);
+                    console.log('✅ Habitaciones sincronizadas');
+                } catch (roomError) {
+                    console.warn('⚠️ Error sincronizando habitaciones:', roomError.message);
+                }
 
-                const incidents = await api.get(ENDPOINTS.INCIDENTS_BY_MAID(userData.userId));
-                await this.saveIncidentsLocal(incidents);
+                // Sincronizar incidencias
+                try {
+                    const incidents = await api.get(ENDPOINTS.INCIDENTS_BY_MAID(userData.userId));
+                    await this.saveIncidentsLocal(incidents);
+                    console.log('✅ Incidencias sincronizadas');
+                } catch (incidentError) {
+                    console.warn('⚠️ Error sincronizando incidencias:', incidentError.message);
+                }
             }
 
             // Procesar cola de cambios pendientes
-            await this.processSyncQueue();
+            try {
+                await this.processSyncQueue();
+                console.log('✅ Cola de sincronización procesada');
+            } catch (queueError) {
+                console.warn('⚠️ Error procesando cola:', queueError.message);
+            }
 
             console.log('✅ Sincronización completa finalizada');
         } catch (error) {
             console.error('❌ Error en sincronización completa:', error);
+            throw error; // Re-lanzar para que el catch externo lo maneje
         }
     }
 
@@ -502,9 +525,9 @@ class DatabaseService {
             });
         }
         
-        // Procesar cola de sincronización
-        this.processSyncQueue();
-        this.syncAll();
+        // Procesar cola de sincronización y sincronizar (no bloqueante)
+        this.processSyncQueue().catch(err => console.warn('Error en sync queue:', err));
+        this.syncAll().catch(err => console.warn('Error en syncAll:', err));
     }
 
     handleOffline() {
