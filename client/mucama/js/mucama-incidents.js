@@ -26,25 +26,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // Connectivity indicator
+    // Connectivity indicator y manejo de reconexión
     updateConnectivityIndicator();
+    
+    // EVENTO ONLINE: Sincronizar automáticamente al reconectar
     window.addEventListener('online', async () => {
-        console.log('🌐 Evento ONLINE detectado en mucama-incidents');
+        console.log('\n=== 🌐 EVENTO ONLINE DETECTADO ===');
         updateConnectivityIndicator();
-        showToast('🌐 Conexión restaurada. Sincronizando...', 'info');
+        showToast('🌐 Conexión restaurada. Sincronizando cambios pendientes...', 'info');
+        
+        // Esperar un momento para asegurar que la conexión es estable
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         try {
-            // Sincronizar cambios pendientes
-            console.log('📤 Iniciando sincronización desde mucama-incidents...');
+            console.log('🔍 Revisando cola de sincronización...');
             await dbService.processSyncQueue();
-            console.log('✅ Sincronización completada');
+            console.log('✅ Sincronización completada exitosamente');
             
-            // Recargar incidencias después de sincronizar
+            // Recargar incidencias desde el servidor
+            console.log('🔄 Recargando incidencias desde el servidor...');
             await loadIncidents();
+            
             showToast('✅ Sincronización completada', 'success');
+            console.log('=== ✅ SINCRONIZACIÓN FINALIZADA ===\n');
+            
         } catch (error) {
             console.error('❌ Error en sincronización:', error);
-            showToast('❌ Error al sincronizar', 'danger');
+            showToast('❌ Error al sincronizar: ' + error.message, 'danger');
         }
     });
     window.addEventListener('offline', () => {
@@ -319,13 +327,15 @@ function setupIncidentForm() {
 }
 
 // Crear nueva incidencia (con offline sync)
-// Backend: IncidentController.createIncident() - POST /api/incidents
+// PASO 1 ONLINE: Petición directa al backend
+// PASO 2 OFFLINE: Guardar en PouchDB, sincronizar al reconectar
 async function createIncident() {
     try {
         const userData = api.getUserData();
         const roomId = document.getElementById('incidentRoom').value;
         const description = document.getElementById('incidentDescription').value;
 
+        // Validaciones
         if (!roomId) {
             showToast('Seleccione una habitación', 'warning');
             return;
@@ -342,9 +352,11 @@ async function createIncident() {
         }
 
         // Preparar fotos en base64 (comprimidas)
+        console.log('📸 Comprimiendo', selectedPhotos.length, 'fotos...');
         const photosBase64 = await Promise.all(
             selectedPhotos.map(photo => compressAndConvertToBase64(photo))
         );
+        console.log('✅ Fotos comprimidas');
 
         const incidentData = {
             room: { id: parseInt(roomId) },
@@ -354,62 +366,73 @@ async function createIncident() {
             photos: JSON.stringify(photosBase64)
         };
 
-        // 1. Primero revisar si hay cambios pendientes en la cola
-        console.log('🔍 Revisando cola de sincronización antes de crear incidencia...');
-        await dbService.processSyncQueue();
-
-        // 2. Intentar enviar la nueva incidencia
-        try {
-            // Verificar conectividad
-            if (!navigator.onLine) {
-                throw new Error('Sin conexión a internet');
-            }
-
-            // Intentar enviar directamente al backend
-            console.log('🌐 Conexión disponible, enviando incidencia al servidor...');
-            await api.post(ENDPOINTS.INCIDENTS, incidentData);
-            console.log('✅ Incidencia enviada correctamente al servidor');
-            showToast('Incidencia registrada correctamente', 'success');
-            
-        } catch (apiError) {
-            // 3. Si falla (sin conexión o error del servidor), guardar localmente
-            console.log('⚠️ Error al enviar al servidor, guardando localmente:', apiError.message);
+        // PASO 1: MODO ONLINE - Enviar directamente al servidor
+        if (navigator.onLine) {
+            console.log('🌐 MODO ONLINE: Enviando incidencia directamente al servidor...');
             
             try {
-                await dbService.createIncidentLocal(incidentData);
-                console.log('💾 Incidencia guardada en cola de sincronización');
-                showToast('📴 Sin conexión. Incidencia guardada, se enviará automáticamente al reconectar', 'warning');
+                const response = await api.post(ENDPOINTS.INCIDENTS, incidentData);
+                console.log('✅ Incidencia creada exitosamente en el servidor:', response);
+                showToast('✅ Incidencia registrada correctamente', 'success');
                 
-                // Intentar registrar background sync si está disponible
-                if ('serviceWorker' in navigator && 'sync' in navigator.serviceWorker) {
-                    try {
-                        const registration = await navigator.serviceWorker.ready;
-                        await registration.sync.register('sync-pending-incidents');
-                        console.log('🔄 Background sync registrado');
-                    } catch (syncError) {
-                        console.log('⚠️ No se pudo registrar background sync:', syncError);
-                    }
+                // Cerrar modal y recargar
+                closeIncidentModalAndReload();
+                return;
+                
+            } catch (apiError) {
+                console.error('❌ Error al enviar al servidor:', apiError);
+                
+                // Si el error es de red (servidor caído), guardar offline
+                if (apiError.message.includes('Failed to fetch') || apiError.message.includes('NetworkError')) {
+                    console.log('🔄 Servidor no disponible, cambiando a modo offline...');
+                    // Continuar al flujo offline
+                } else {
+                    // Error de validación u otro error del servidor
+                    showToast('❌ Error: ' + (apiError.message || 'Error al guardar incidencia'), 'danger');
+                    return;
                 }
-                
-            } catch (dbError) {
-                console.error('❌ Error guardando localmente:', dbError);
-                showToast('Error al guardar incidencia. Por favor intente nuevamente', 'danger');
-                return; // Salir sin cerrar el modal para que el usuario pueda reintentar
             }
         }
-
-        // 4. Cerrar modal y resetear
-        const modal = bootstrap.Modal.getInstance(document.getElementById('newIncidentModal'));
-        if (modal) modal.hide();
-        resetIncidentForm();
-
-        // 5. Recargar lista
-        await loadIncidents();
+        
+        // PASO 2: MODO OFFLINE - Guardar en PouchDB
+        console.log('📴 MODO OFFLINE: Guardando incidencia en PouchDB...');
+        try {
+            const savedDoc = await dbService.createIncidentLocal(incidentData);
+            console.log('💾 Incidencia guardada localmente:', savedDoc._id);
+            showToast('📴 Sin conexión. Incidencia guardada, se sincronizará automáticamente al reconectar', 'warning');
+            
+            // Registrar background sync para sincronización automática
+            if ('serviceWorker' in navigator && 'sync' in navigator.serviceWorker) {
+                try {
+                    const registration = await navigator.serviceWorker.ready;
+                    await registration.sync.register('sync-pending-incidents');
+                    console.log('✅ Background sync registrado');
+                } catch (syncError) {
+                    console.warn('⚠️ No se pudo registrar background sync:', syncError);
+                }
+            }
+            
+            // Cerrar modal y recargar
+            closeIncidentModalAndReload();
+            
+        } catch (dbError) {
+            console.error('❌ Error guardando en PouchDB:', dbError);
+            showToast('❌ Error al guardar incidencia. Por favor intente nuevamente', 'danger');
+            // NO cerrar modal para que el usuario pueda reintentar
+        }
 
     } catch (error) {
-        console.error('❌ Error creating incident:', error);
-        showToast('Error al registrar incidencia', 'danger');
+        console.error('❌ Error general en createIncident:', error);
+        showToast('❌ Error al registrar incidencia', 'danger');
     }
+}
+
+// Helper para cerrar modal y recargar
+function closeIncidentModalAndReload() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('newIncidentModal'));
+    if (modal) modal.hide();
+    resetIncidentForm();
+    loadIncidents();
 }
 
 // Variables para la cámara

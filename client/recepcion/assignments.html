@@ -227,10 +227,9 @@
 
                 try {
                     const assigned = allRooms.filter(r => r.assignedTo);
+                    
                     for (const room of assigned) {
-                        room.assignedTo = null;
-                        room.assignedAt = null;
-                        await api.put(ENDPOINTS.ROOM_BY_ID(room.id), room);
+                        await api.patch(ENDPOINTS.ROOM_ASSIGN(room.id), { maidId: null });
                     }
 
                     await loadData();

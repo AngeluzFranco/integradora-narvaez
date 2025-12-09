@@ -183,14 +183,17 @@ class DatabaseService {
     }
 
     async createIncidentLocal(incidentData) {
+        console.log('\n=== 💾 GUARDANDO INCIDENCIA EN POUCHDB ===');
+        
         if (!this.incidentsDB) {
             console.error('❌ incidentsDB no disponible');
             return null;
         }
 
         try {
+            const tempId = `incident_temp_${Date.now()}`;
             const doc = {
-                _id: `incident_temp_${Date.now()}`,
+                _id: tempId,
                 ...incidentData,
                 createdAt: new Date().toISOString(),
                 localCreated: true,
@@ -198,8 +201,15 @@ class DatabaseService {
                 localUpdated: Date.now()
             };
 
+            console.log('📝 Documento a guardar:', {
+                _id: doc._id,
+                room: doc.room,
+                description: doc.description.substring(0, 50) + '...',
+                photosLength: doc.photos ? doc.photos.length : 0
+            });
+
             await this.incidentsDB.put(doc);
-            console.log('💾 Incidencia guardada en IndexedDB:', doc._id);
+            console.log('✅ Incidencia guardada en IndexedDB:', tempId);
 
             // Agregar a cola de sincronización
             const queueItem = {
@@ -207,17 +217,19 @@ class DatabaseService {
                 action: 'POST',
                 endpoint: ENDPOINTS.INCIDENTS,
                 data: incidentData,
-                tempId: doc._id,
+                tempId: tempId,
                 timestamp: Date.now()
             };
             
-            console.log('📤 Agregando incidencia a cola de sincronización:', queueItem);
+            console.log('📤 Agregando a cola de sincronización...');
             await this.addToSyncQueue(queueItem);
 
-            console.log('✅ Incidencia creada localmente, pendiente de sincronización');
+            console.log('✅ Incidencia lista para sincronización');
+            console.log('=== FIN GUARDADO LOCAL ===\n');
             return doc;
         } catch (error) {
-            console.error('Error creando incidencia local:', error);
+            console.error('❌ Error creando incidencia local:', error);
+            console.error('Stack:', error.stack);
             return null;
         }
     }
@@ -363,21 +375,33 @@ class DatabaseService {
                 break;
 
             case 'INCIDENT_CREATE':
-                console.log('📤 Enviando incidencia al servidor:', item.endpoint);
-                const newIncident = await api.post(item.endpoint, item.data);
-                console.log('✅ Incidencia creada en servidor:', newIncident);
+                console.log('📤 Enviando incidencia al servidor...');
+                console.log('  Endpoint:', item.endpoint);
+                console.log('  Datos:', {
+                    room: item.data.room,
+                    reportedBy: item.data.reportedBy,
+                    description: item.data.description.substring(0, 50) + '...',
+                    photosLength: item.data.photos ? item.data.photos.length : 0
+                });
                 
-                // Reemplazar documento temporal con el real
+                const newIncident = await api.post(item.endpoint, item.data);
+                console.log('✅ Incidencia creada exitosamente en servidor');
+                console.log('  ID del servidor:', newIncident.id);
+                console.log('  Temp ID local:', item.tempId);
+                
+                // Reemplazar documento temporal con el real del servidor
                 if (item.tempId && newIncident.id) {
                     try {
                         const tempDoc = await this.incidentsDB.get(item.tempId);
                         await this.incidentsDB.remove(tempDoc);
                         console.log('🗑️ Documento temporal eliminado:', item.tempId);
                     } catch (err) {
-                        console.warn('Documento temporal no encontrado:', item.tempId, err);
+                        console.warn('⚠️ Documento temporal no encontrado (puede estar bien):', item.tempId);
                     }
                     
-                    await this.incidentsDB.put({
+                    // Guardar la incidencia real del servidor
+                    try {
+                        await this.incidentsDB.put({
                         _id: `incident_${newIncident.id}`,
                         ...newIncident,
                         localUpdated: Date.now()
