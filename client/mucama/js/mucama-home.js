@@ -102,22 +102,33 @@ async function loadMyRooms() {
     try {
         const userData = api.getUserData();
         let rooms;
+        let incidents = [];
 
         if (navigator.onLine) {
             // ONLINE: Obtener del backend
             try {
-                rooms = await api.get(ENDPOINTS.ROOMS_BY_MAID(userData.userId));
+                // Cargar habitaciones e incidencias en paralelo
+                [rooms, incidents] = await Promise.all([
+                    api.get(ENDPOINTS.ROOMS_BY_MAID(userData.userId)),
+                    api.get(ENDPOINTS.INCIDENTS_BY_MAID(userData.userId))
+                ]);
                 // Guardar en PouchDB para uso offline
                 await dbService.saveRoomsLocal(rooms);
+                await dbService.saveIncidentsLocal(incidents);
             } catch (error) {
                 console.warn('Error cargando del backend, usando datos locales:', error);
                 rooms = await dbService.getRoomsLocal(userData.userId);
+                incidents = await dbService.getIncidentsLocal();
             }
         } else {
             // OFFLINE: Obtener de PouchDB
             console.log('📵 Modo offline: Cargando datos locales');
             rooms = await dbService.getRoomsLocal(userData.userId);
+            incidents = await dbService.getIncidentsLocal();
         }
+        
+        // Marcar habitaciones como bloqueadas si tienen incidencias activas
+        rooms = markBlockedRooms(rooms, incidents);
         
         currentRooms = rooms;
         renderRooms(rooms);
@@ -171,15 +182,34 @@ function renderRooms(rooms) {
     `).join('');
 }
 
+// Marcar habitaciones como bloqueadas si tienen incidencias activas
+function markBlockedRooms(rooms, incidents) {
+    // Crear set de IDs de habitaciones con incidencias activas
+    const roomsWithActiveIncidents = new Set();
+    incidents.filter(i => i.status === 'OPEN').forEach(incident => {
+        if (incident.room && incident.room.id) {
+            roomsWithActiveIncidents.add(incident.room.id);
+        }
+    });
+    
+    // Marcar habitaciones como bloqueadas
+    return rooms.map(room => {
+        if (roomsWithActiveIncidents.has(room.id)) {
+            return { ...room, status: ROOM_STATUS.BLOCKED, originalStatus: room.status };
+        }
+        return room;
+    });
+}
+
 // Actualizar estadísticas
 function updateStats(rooms) {
     const clean = rooms.filter(r => r.status === ROOM_STATUS.CLEAN).length;
     const dirty = rooms.filter(r => r.status === ROOM_STATUS.DIRTY).length;
-    const occupied = rooms.filter(r => r.status === ROOM_STATUS.OCCUPIED).length;
+    const blocked = rooms.filter(r => r.status === ROOM_STATUS.BLOCKED).length;
 
     document.getElementById('cleanCount').textContent = clean;
     document.getElementById('dirtyCount').textContent = dirty;
-    document.getElementById('occupiedCount').textContent = occupied;
+    document.getElementById('occupiedCount').textContent = blocked;
 }
 
 // Abrir modal para cambiar estado
@@ -403,7 +433,8 @@ function getStatusText(status) {
     const statusMap = {
         [ROOM_STATUS.CLEAN]: 'Limpia',
         [ROOM_STATUS.DIRTY]: 'Sucia',
-        [ROOM_STATUS.OCCUPIED]: 'Ocupada'
+        [ROOM_STATUS.OCCUPIED]: 'Ocupada',
+        [ROOM_STATUS.BLOCKED]: 'Bloqueada'
     };
     return statusMap[status] || status;
 }

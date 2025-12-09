@@ -227,6 +227,13 @@ body {
     border-color: rgba(197, 48, 48, 0.2);
 }
 
+.status-BLOCKED {
+    background-color: #fed7d7;
+    color: #9b2c2c;
+    border-color: rgba(155, 44, 44, 0.3);
+    font-weight: 600;
+}
+
 /* ===== BOTTOM NAVIGATION ELEGANTE ===== */
 .bottom-nav {
     position: fixed;

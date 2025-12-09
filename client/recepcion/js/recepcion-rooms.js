@@ -84,11 +84,41 @@ function populateBuildingSelectors() {
     });
 }
 
+// Marcar habitaciones como bloqueadas si tienen incidencias activas
+async function markBlockedRooms(rooms) {
+    try {
+        // Obtener todas las incidencias
+        const incidents = await api.get(ENDPOINTS.INCIDENTS);
+        
+        // Crear set de IDs de habitaciones con incidencias activas
+        const roomsWithActiveIncidents = new Set();
+        incidents.filter(i => i.status === 'OPEN').forEach(incident => {
+            if (incident.room && incident.room.id) {
+                roomsWithActiveIncidents.add(incident.room.id);
+            }
+        });
+        
+        // Marcar habitaciones como bloqueadas
+        return rooms.map(room => {
+            if (roomsWithActiveIncidents.has(room.id)) {
+                return { ...room, status: ROOM_STATUS.BLOCKED, originalStatus: room.status };
+            }
+            return room;
+        });
+    } catch (error) {
+        console.error('Error obteniendo incidencias:', error);
+        return rooms; // En caso de error, devolver habitaciones sin modificar
+    }
+}
+
 // Cargar todas las habitaciones
 // Backend: RoomController.getAllRooms() - GET /api/rooms
 async function loadRooms() {
     try {
-        allRooms = await api.get(ENDPOINTS.ROOMS);
+        let rooms = await api.get(ENDPOINTS.ROOMS);
+        // Marcar habitaciones como bloqueadas si tienen incidencias activas
+        rooms = await markBlockedRooms(rooms);
+        allRooms = rooms;
         renderRooms(allRooms);
     } catch (error) {
         console.error('Error loading rooms:', error);
