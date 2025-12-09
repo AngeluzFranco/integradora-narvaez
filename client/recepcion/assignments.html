@@ -173,10 +173,7 @@
             if (!maidId) return;
             
             try {
-                const room = await api.get(ENDPOINTS.ROOM_BY_ID(roomId));
-                room.assignedTo = { id: parseInt(maidId) };
-                room.assignedAt = new Date().toISOString();
-                await api.put(ENDPOINTS.ROOM_BY_ID(roomId), room);
+                await api.patch(ENDPOINTS.ROOM_ASSIGN(roomId), { maidId: parseInt(maidId) });
                 
                 await loadData();
                 showToast('Habitación asignada', 'success');
@@ -188,10 +185,7 @@
 
         window.unassignRoom = async (roomId) => {
             try {
-                const room = await api.get(ENDPOINTS.ROOM_BY_ID(roomId));
-                room.assignedTo = null;
-                room.assignedAt = null;
-                await api.put(ENDPOINTS.ROOM_BY_ID(roomId), room);
+                await api.patch(ENDPOINTS.ROOM_ASSIGN(roomId), { maidId: null });
                 
                 await loadData();
                 showToast('Asignación eliminada', 'success');
@@ -217,9 +211,7 @@
                         const room = unassigned[i];
                         const maid = allUsers[i % allUsers.length];
                         
-                        room.assignedTo = { id: maid.id };
-                        room.assignedAt = new Date().toISOString();
-                        await api.put(ENDPOINTS.ROOM_BY_ID(room.id), room);
+                        await api.patch(ENDPOINTS.ROOM_ASSIGN(room.id), { maidId: maid.id });
                     }
 
                     await loadData();

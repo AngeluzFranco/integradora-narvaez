@@ -112,7 +112,13 @@ function setupNewUserButton() {
         editingUserId = null;
         document.getElementById('userModalTitle').textContent = 'Nuevo Usuario';
         document.getElementById('userForm').reset();
-        document.getElementById('passwordGroup').classList.remove('d-none');
+        
+        // Mostrar y hacer requerido el password para nuevo usuario
+        const passwordInput = document.getElementById('userPassword');
+        const passwordGroup = document.getElementById('passwordGroup');
+        passwordGroup.classList.remove('d-none');
+        passwordInput.setAttribute('required', 'required');
+        passwordInput.placeholder = 'Mínimo 4 caracteres';
         
         const modal = new bootstrap.Modal(document.getElementById('userModal'));
         modal.show();
@@ -130,10 +136,16 @@ window.editUser = async (userId) => {
         document.getElementById('userUsername').value = user.username;
         document.getElementById('userEmail').value = user.email || '';
         document.getElementById('userRole').value = user.role;
-        document.getElementById('userPassword').value = '';
         
-        // Ocultar campo password en edición (opcional)
-        document.getElementById('passwordGroup').classList.add('d-none');
+        // Limpiar password y quitar required
+        const passwordInput = document.getElementById('userPassword');
+        passwordInput.value = '';
+        passwordInput.removeAttribute('required');
+        
+        // Mostrar campo password con placeholder indicando que es opcional
+        const passwordGroup = document.getElementById('passwordGroup');
+        passwordGroup.classList.remove('d-none');
+        passwordInput.placeholder = 'Dejar vacío para no cambiar';
         
         const modal = new bootstrap.Modal(document.getElementById('userModal'));
         modal.show();
@@ -154,12 +166,13 @@ function setupFormSubmit() {
 // Guardar usuario (crear o actualizar)
 async function saveUser() {
     try {
+        const passwordValue = document.getElementById('userPassword').value.trim();
+        
         const userData = {
             name: document.getElementById('userName').value.trim(),
             username: document.getElementById('userUsername').value.trim(),
             email: document.getElementById('userEmail').value.trim(),
-            role: document.getElementById('userRole').value,
-            password: document.getElementById('userPassword').value.trim()
+            role: document.getElementById('userRole').value
         };
 
         // Validaciones frontend
@@ -182,22 +195,25 @@ async function saveUser() {
 
         if (editingUserId) {
             // Actualizar usuario existente
-            // Si no se proporciona password, no se actualizará
-            if (!userData.password) {
-                delete userData.password;
-            } else if (userData.password.length < 4) {
-                showToast('La contraseña debe tener al menos 4 caracteres', 'warning');
-                return;
+            // Solo incluir password si se proporcionó uno nuevo
+            if (passwordValue) {
+                if (passwordValue.length < 4) {
+                    showToast('La contraseña debe tener al menos 4 caracteres', 'warning');
+                    return;
+                }
+                userData.password = passwordValue;
             }
+            // No incluir password si está vacío (no se enviará al backend)
             
             const response = await api.put(ENDPOINTS.USER_BY_ID(editingUserId), userData);
             showToast('Usuario actualizado correctamente', 'success');
         } else {
-            // Crear nuevo usuario
-            if (!userData.password || userData.password.length < 4) {
-                showToast('La contraseña debe tener al menos 4 caracteres', 'warning');
+            // Crear nuevo usuario - password es obligatorio
+            if (!passwordValue || passwordValue.length < 4) {
+                showToast('La contraseña es requerida y debe tener al menos 4 caracteres', 'warning');
                 return;
             }
+            userData.password = passwordValue;
             
             const response = await api.post(ENDPOINTS.USERS, userData);
             showToast('Usuario creado correctamente', 'success');

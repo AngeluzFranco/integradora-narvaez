@@ -256,7 +256,7 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('sync', (event) => {
     console.log('[SW] Background sync triggered:', event.tag);
     
-    if (event.tag === 'sync-pending-changes') {
+    if (event.tag === 'sync-pending-changes' || event.tag === 'sync-pending-incidents') {
         event.waitUntil(syncPendingChanges());
     }
 });
@@ -265,51 +265,26 @@ async function syncPendingChanges() {
     console.log('🔄 [SW] Iniciando sincronización de cambios pendientes...');
     
     try {
-        // Importar PouchDB
-        await importScripts('https://cdn.jsdelivr.net/npm/pouchdb@8.0.1/dist/pouchdb.min.js');
+        // Obtener todos los clientes (páginas abiertas)
+        const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
         
-        // Abrir la base de datos de sincronización
-        const syncDB = new PouchDB('hotel_sync_queue');
-        
-        // Obtener todos los items pendientes
-        const result = await syncDB.allDocs({ include_docs: true });
-        const pendingItems = result.rows.filter(row => !row.doc.synced);
-        
-        console.log(`📋 [SW] ${pendingItems.length} items pendientes en la cola`);
-        
-        if (pendingItems.length === 0) {
+        if (clients.length === 0) {
+            console.log('⚠️ [SW] No hay clientes activos, no se puede sincronizar');
             return;
         }
         
-        // Obtener configuración del backend
-        const backendUrl = 'https://nonemotive-suggestively-josphine.ngrok-free.dev';
+        console.log(`👥 [SW] ${clients.length} cliente(s) activo(s), solicitando sincronización...`);
         
-        // Procesar cada item
-        for (const item of pendingItems) {
-            const doc = item.doc;
-            
-            try {
-                console.log(`📤 [SW] Sincronizando ${doc.type}:`, doc._id);
-                
-                if (doc.type === 'INCIDENT_CREATE') {
-                    // Obtener el token del localStorage (a través de un cliente)
-                    const clients = await self.clients.matchAll();
-                    if (clients.length === 0) {
-                        console.log('⚠️ [SW] No hay clientes activos, esperando...');
-                        continue;
-                    }
-                    
-                    // Enviar mensaje al cliente para que sincronice
-                    clients[0].postMessage({
-                        type: 'SYNC_INCIDENT',
-                        incidentId: doc.data._id
-                    });
-                }
-                
-            } catch (error) {
-                console.error(`❌ [SW] Error sincronizando item ${doc._id}:`, error);
-            }
+        // Enviar mensaje a todos los clientes para que procesen la cola
+        for (const client of clients) {
+            client.postMessage({
+                type: 'PROCESS_SYNC_QUEUE',
+                source: 'service-worker',
+                timestamp: Date.now()
+            });
         }
+        
+        console.log('✅ [SW] Solicitud de sincronización enviada a clientes');
         
     } catch (error) {
         console.error('❌ [SW] Error en syncPendingChanges:', error);

@@ -52,6 +52,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateConnectivityIndicator();
     });
 
+    // Listener para mensajes del Service Worker
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', async (event) => {
+            console.log('📨 Mensaje del Service Worker:', event.data);
+            
+            if (event.data.type === 'PROCESS_SYNC_QUEUE') {
+                console.log('🔄 Service Worker solicita procesar cola de sincronización');
+                try {
+                    await dbService.processSyncQueue();
+                    await loadIncidents();
+                    console.log('✅ Cola procesada desde Service Worker');
+                } catch (error) {
+                    console.error('❌ Error procesando cola desde SW:', error);
+                }
+            }
+        });
+    }
+
     // Cargar habitaciones asignadas (para el selector)
     await loadMyRooms();
 
@@ -336,40 +354,60 @@ async function createIncident() {
             photos: JSON.stringify(photosBase64)
         };
 
-        // Verificar conectividad antes de intentar enviar
+        // 1. Primero revisar si hay cambios pendientes en la cola
+        console.log('🔍 Revisando cola de sincronización antes de crear incidencia...');
+        await dbService.processSyncQueue();
+
+        // 2. Intentar enviar la nueva incidencia
         try {
-            if (navigator.onLine) {
-                // Intentar enviar directamente
-                await api.post(ENDPOINTS.INCIDENTS, incidentData);
-                showToast('Incidencia registrada correctamente', 'success');
-            } else {
-                // Sin conexión, guardar localmente
-                await dbService.createIncidentLocal(incidentData);
-                showToast('📴 Incidencia guardada. Se sincronizará cuando haya conexión', 'warning');
+            // Verificar conectividad
+            if (!navigator.onLine) {
+                throw new Error('Sin conexión a internet');
             }
+
+            // Intentar enviar directamente al backend
+            console.log('🌐 Conexión disponible, enviando incidencia al servidor...');
+            await api.post(ENDPOINTS.INCIDENTS, incidentData);
+            console.log('✅ Incidencia enviada correctamente al servidor');
+            showToast('Incidencia registrada correctamente', 'success');
+            
         } catch (apiError) {
-            // Si falla la petición (ej: servidor caído), guardar localmente
-            console.log('Error en API, guardando localmente:', apiError);
+            // 3. Si falla (sin conexión o error del servidor), guardar localmente
+            console.log('⚠️ Error al enviar al servidor, guardando localmente:', apiError.message);
+            
             try {
                 await dbService.createIncidentLocal(incidentData);
-                showToast('📴 Incidencia guardada localmente. Se sincronizará cuando haya conexión', 'warning');
+                console.log('💾 Incidencia guardada en cola de sincronización');
+                showToast('📴 Sin conexión. Incidencia guardada, se enviará automáticamente al reconectar', 'warning');
+                
+                // Intentar registrar background sync si está disponible
+                if ('serviceWorker' in navigator && 'sync' in navigator.serviceWorker) {
+                    try {
+                        const registration = await navigator.serviceWorker.ready;
+                        await registration.sync.register('sync-pending-incidents');
+                        console.log('🔄 Background sync registrado');
+                    } catch (syncError) {
+                        console.log('⚠️ No se pudo registrar background sync:', syncError);
+                    }
+                }
+                
             } catch (dbError) {
-                console.error('Error guardando localmente:', dbError);
-                showToast('Error al guardar incidencia', 'danger');
+                console.error('❌ Error guardando localmente:', dbError);
+                showToast('Error al guardar incidencia. Por favor intente nuevamente', 'danger');
                 return; // Salir sin cerrar el modal para que el usuario pueda reintentar
             }
         }
 
-        // Cerrar modal y resetear
+        // 4. Cerrar modal y resetear
         const modal = bootstrap.Modal.getInstance(document.getElementById('newIncidentModal'));
         if (modal) modal.hide();
         resetIncidentForm();
 
-        // Recargar lista
+        // 5. Recargar lista
         await loadIncidents();
 
     } catch (error) {
-        console.error('Error creating incident:', error);
+        console.error('❌ Error creating incident:', error);
         showToast('Error al registrar incidencia', 'danger');
     }
 }

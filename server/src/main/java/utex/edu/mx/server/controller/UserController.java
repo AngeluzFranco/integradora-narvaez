@@ -151,8 +151,8 @@ public class UserController {
                     }
                     
                     // Solo actualizar password si se proporciona uno nuevo
-                    if (userDetails.getPassword() != null && !userDetails.getPassword().isEmpty()) {
-                        if (userDetails.getPassword().length() < 4) {
+                    if (userDetails.getPassword() != null && !userDetails.getPassword().trim().isEmpty()) {
+                        if (userDetails.getPassword().trim().length() < 4) {
                             return ResponseEntity.badRequest().body("Password debe tener al menos 4 caracteres");
                         }
                         user.setPassword(passwordEncoder.encode(userDetails.getPassword()));

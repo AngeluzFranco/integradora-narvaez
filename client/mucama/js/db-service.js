@@ -234,7 +234,8 @@ class DatabaseService {
             const queueDoc = {
                 ...item,
                 addedAt: Date.now(),
-                synced: false
+                synced: false,
+                attempts: 0
             };
             
             const result = await this.syncDB.post(queueDoc);
