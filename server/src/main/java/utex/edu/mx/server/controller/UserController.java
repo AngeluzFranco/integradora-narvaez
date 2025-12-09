@@ -6,6 +6,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import utex.edu.mx.server.model.User;
 import utex.edu.mx.server.repository.UserRepository;
+import utex.edu.mx.server.repository.RoomRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.List;
 public class UserController {
     
     private final UserRepository userRepository;
+    private final RoomRepository roomRepository;
     private final PasswordEncoder passwordEncoder;
     
     /**
@@ -167,7 +169,7 @@ public class UserController {
     
     /**
      * PATCH /api/users/{id}/activate
-     * Activar/desactivar usuario
+     * Activar/desactivar usuario (soft delete/restore)
      */
     @PatchMapping("/{id}/activate")
     public ResponseEntity<?> toggleUserStatus(@PathVariable Long id, @RequestBody Boolean active) {
@@ -176,6 +178,15 @@ public class UserController {
                     // Prevenir desactivación de administradores
                     if (user.getRole() == User.Role.ADMIN && !active) {
                         return ResponseEntity.badRequest().body("No se puede desactivar un usuario administrador");
+                    }
+                    
+                    // Verificar si es mucama con habitaciones asignadas al desactivar
+                    if (user.getRole() == User.Role.MAID && !active) {
+                        long assignedRooms = roomRepository.findByAssignedToId(id).size();
+                        if (assignedRooms > 0) {
+                            return ResponseEntity.badRequest()
+                                .body("No se puede desactivar una mucama con " + assignedRooms + " habitaciones asignadas. Primero desasigne las habitaciones.");
+                        }
                     }
                     
                     user.setActive(active);
@@ -188,7 +199,7 @@ public class UserController {
     
     /**
      * DELETE /api/users/{id}
-     * Eliminar usuario (soft delete - marca como inactivo)
+     * Eliminar usuario permanentemente (hard delete)
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
@@ -199,26 +210,20 @@ public class UserController {
                         return ResponseEntity.badRequest().body("No se puede eliminar un usuario administrador");
                     }
                     
-                    // Soft delete: marcar como inactivo en lugar de eliminar
-                    user.setActive(false);
-                    user.setUpdatedAt(LocalDateTime.now());
-                    userRepository.save(user);
+                    // Verificar si es mucama con habitaciones asignadas
+                    if (user.getRole() == User.Role.MAID) {
+                        long assignedRooms = roomRepository.findByAssignedToId(id).size();
+                        if (assignedRooms > 0) {
+                            return ResponseEntity.badRequest()
+                                .body("No se puede eliminar una mucama con " + assignedRooms + " habitaciones asignadas. Primero desasigne las habitaciones.");
+                        }
+                    }
+                    
+                    // Hard delete: eliminar permanentemente
+                    userRepository.delete(user);
                     return ResponseEntity.ok().build();
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
     
-    /**
-     * DELETE /api/users/{id}/hard
-     * Eliminar usuario permanentemente (solo para admin)
-     */
-    @DeleteMapping("/{id}/hard")
-    public ResponseEntity<Void> hardDeleteUser(@PathVariable Long id) {
-        return userRepository.findById(id)
-                .map(user -> {
-                    userRepository.delete(user);
-                    return ResponseEntity.ok().<Void>build();
-                })
-                .orElse(ResponseEntity.notFound().build());
-    }
 }

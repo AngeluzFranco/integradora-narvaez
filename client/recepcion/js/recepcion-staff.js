@@ -90,11 +90,11 @@ function renderUsers(users) {
                     </button>
                     <button class="btn btn-outline-${user.active ? 'warning' : 'success'}" 
                             onclick="toggleUserStatus(${user.id}, ${!user.active})"
-                            title="${user.active ? 'Desactivar' : 'Activar'}">
+                            title="${user.active ? 'Suspender (baja lógica)' : 'Activar'}">
                         ${user.active ? '🚫' : '✅'}
                     </button>
                     <button class="btn btn-outline-danger" onclick="deleteUser(${user.id})" 
-                            title="Eliminar">
+                            title="Eliminar permanentemente (baja física)">
                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                             <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
                             <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
@@ -249,7 +249,7 @@ async function saveUser() {
     }
 }
 
-// Activar/desactivar usuario
+// Activar/desactivar usuario (Suspender/Restaurar)
 window.toggleUserStatus = async (userId, newStatus) => {
     try {
         // Buscar el usuario para verificar su rol
@@ -260,8 +260,16 @@ window.toggleUserStatus = async (userId, newStatus) => {
             return;
         }
         
+        // Confirmar suspensión
+        if (!newStatus) {
+            const userName = user ? user.name : '';
+            if (!confirm(`¿Está seguro de suspender a ${userName}?\n\nNota: Si tiene habitaciones asignadas, debe desasignarlas primero.`)) {
+                return;
+            }
+        }
+        
         await api.patch(ENDPOINTS.USER_ACTIVATE(userId), newStatus);
-        showToast(`Usuario ${newStatus ? 'activado' : 'desactivado'} correctamente`, 'success');
+        showToast(`Usuario ${newStatus ? 'activado' : 'suspendido'} correctamente`, 'success');
         await loadUsers();
     } catch (error) {
         console.error('Error toggling user status:', error);
@@ -275,21 +283,33 @@ window.toggleUserStatus = async (userId, newStatus) => {
     }
 };
 
-// Eliminar usuario (soft delete)
+// Eliminar usuario permanentemente (hard delete)
 window.deleteUser = async (userId) => {
     try {
         // Buscar el usuario para verificar su rol
         const user = allUsers.find(u => u.id === userId);
         
-        if (user && user.role === USER_ROLES.ADMIN) {
+        if (!user) {
+            showToast('Usuario no encontrado', 'danger');
+            return;
+        }
+        
+        if (user.role === USER_ROLES.ADMIN) {
             showToast('No se puede eliminar un usuario administrador', 'warning');
             return;
         }
         
-        if (!confirm(`¿Está seguro de eliminar al usuario ${user ? user.name : ''}?`)) return;
+        // Advertencia especial para mucamas
+        let confirmMessage = `¿Está seguro de ELIMINAR PERMANENTEMENTE al usuario ${user.name}?\n\n⚠️ Esta acción NO se puede deshacer.`;
+        
+        if (user.role === USER_ROLES.MAID) {
+            confirmMessage += '\n\nNota: Si tiene habitaciones asignadas, no se podrá eliminar.\nPrimero debe desasignar todas sus habitaciones.';
+        }
+        
+        if (!confirm(confirmMessage)) return;
         
         await api.delete(ENDPOINTS.USER_BY_ID(userId));
-        showToast('Usuario eliminado correctamente', 'success');
+        showToast('✅ Usuario eliminado permanentemente', 'success');
         await loadUsers();
     } catch (error) {
         console.error('Error deleting user:', error);
