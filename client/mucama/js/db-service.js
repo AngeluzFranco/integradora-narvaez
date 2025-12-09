@@ -17,7 +17,8 @@ class DatabaseService {
         this.syncInProgress = false;
         this.pendingChanges = [];
         
-        this.init();
+        // Promise para esperar la inicialización
+        this.initPromise = this.init();
     }
 
     async init() {
@@ -58,9 +59,15 @@ class DatabaseService {
         }
     }
 
+    // Método para esperar a que PouchDB esté listo
+    async ensureReady() {
+        await this.initPromise;
+    }
+
     // === GESTIÓN DE HABITACIONES ===
 
     async saveRoomsLocal(rooms) {
+        await this.ensureReady();
         if (!this.roomsDB) return;
         
         try {
@@ -87,6 +94,7 @@ class DatabaseService {
     }
 
     async getRoomsLocal(maidId = null) {
+        await this.ensureReady();
         if (!this.roomsDB) return [];
         
         try {
@@ -106,6 +114,7 @@ class DatabaseService {
     }
 
     async updateRoomStatusLocal(roomId, status) {
+        await this.ensureReady();
         if (!this.roomsDB) return null;
 
         try {
@@ -138,6 +147,7 @@ class DatabaseService {
     // === GESTIÓN DE INCIDENCIAS ===
 
     async saveIncidentsLocal(incidents) {
+        await this.ensureReady();
         if (!this.incidentsDB) return;
         
         try {
@@ -164,6 +174,7 @@ class DatabaseService {
     }
 
     async getIncidentsLocal(maidId = null) {
+        await this.ensureReady();
         if (!this.incidentsDB) return [];
         
         try {
@@ -184,6 +195,8 @@ class DatabaseService {
 
     async createIncidentLocal(incidentData) {
         console.log('\n=== 💾 GUARDANDO INCIDENCIA EN POUCHDB ===');
+        
+        await this.ensureReady();
         
         if (!this.incidentsDB) {
             console.error('❌ incidentsDB no disponible');
@@ -237,6 +250,7 @@ class DatabaseService {
     // === COLA DE SINCRONIZACIÓN ===
 
     async addToSyncQueue(item) {
+        await this.ensureReady();
         if (!this.syncDB) {
             console.error('❌ syncDB no disponible');
             return;
@@ -285,6 +299,7 @@ class DatabaseService {
     }
 
     async processSyncQueue() {
+        await this.ensureReady();
         if (!this.syncDB) {
             console.log('⚠️ SyncDB no disponible');
             return;
