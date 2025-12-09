@@ -402,10 +402,14 @@ class DatabaseService {
                     // Guardar la incidencia real del servidor
                     try {
                         await this.incidentsDB.put({
-                        _id: `incident_${newIncident.id}`,
-                        ...newIncident,
-                        localUpdated: Date.now()
-                    });
+                            _id: `incident_${newIncident.id}`,
+                            ...newIncident,
+                            localUpdated: Date.now()
+                        });
+                        console.log('💾 Incidencia del servidor guardada localmente');
+                    } catch (err) {
+                        console.warn('⚠️ Error guardando incidencia del servidor localmente:', err);
+                    }
                 }
                 break;
 
